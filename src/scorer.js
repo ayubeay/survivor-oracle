@@ -96,4 +96,26 @@ function calculateSurvivalScore(tokenData) {
   return { score, riskLevel, breakdown, weights: WEIGHTS, timestamp: new Date().toISOString() };
 }
 
-module.exports = { calculateSurvivalScore, WEIGHTS };
+function generateReasons(tokenData, breakdown) {
+  var reasons = [];
+  if (breakdown.mintAuthority === 0) reasons.push('MINT_AUTH_ACTIVE');
+  if (breakdown.freezeAuthority === 0) reasons.push('FREEZE_AUTH_ACTIVE');
+  if (breakdown.lpLocked === 0) reasons.push('LP_NOT_LOCKED');
+  if (breakdown.holderConcentration <= 20) reasons.push('HIGH_CONCENTRATION');
+  if (breakdown.tokenAge <= 15) reasons.push('VERY_NEW');
+  if (breakdown.liquidityDepth <= 20) reasons.push('LOW_LIQUIDITY');
+  if (breakdown.mintAuthority === 100) reasons.push('MINT_REVOKED');
+  if (breakdown.freezeAuthority === 100) reasons.push('FREEZE_REVOKED');
+  if (breakdown.tokenAge >= 85) reasons.push('ESTABLISHED');
+  if (breakdown.liquidityDepth >= 85) reasons.push('DEEP_LIQUIDITY');
+  return reasons;
+}
+
+function getConfidence(tokenData) {
+  var confidence = 'HIGH';
+  if (tokenData.holderNote === 'MEGACAP_SKIP' || tokenData.holderNote === 'MEGA_CAP_FALLBACK') confidence = 'MEDIUM';
+  if (tokenData.liquidityUsd === 0 && tokenData.ageInHours === 0) confidence = 'LOW';
+  return confidence;
+}
+
+module.exports = { calculateSurvivalScore, generateReasons, getConfidence, WEIGHTS };

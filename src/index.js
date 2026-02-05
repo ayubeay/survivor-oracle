@@ -1,6 +1,6 @@
 const express = require('express');
 const { fetchTokenData } = require('./fetcher');
-const { calculateSurvivalScore, WEIGHTS } = require('./scorer');
+const { calculateSurvivalScore, generateReasons, getConfidence, WEIGHTS } = require('./scorer');
 const { startMonitor, getRecentScores } = require('./monitor');
 const { saveScore, getScoreHistory, getRecentScoresDB, getStats, getExtremes } = require('./database');
 
@@ -28,7 +28,9 @@ app.get('/score/:mint', async function(req, res) {
     var fullResult = { mint: mint, name: tokenData.name, symbol: tokenData.symbol, score: result.score, riskLevel: result.riskLevel, safe: result.score >= 55, breakdown: result.breakdown, weights: result.weights, holderNote: tokenData.holderNote, liquidityUsd: tokenData.liquidityUsd, ageInHours: tokenData.ageInHours, timestamp: result.timestamp };
     saveScore({ mint: mint, name: tokenData.name, symbol: tokenData.symbol, score: result.score, riskLevel: result.riskLevel, safe: result.score >= 55, breakdown: result.breakdown, liquidityUsd: tokenData.liquidityUsd, ageInHours: tokenData.ageInHours, holderNote: tokenData.holderNote, source: 'api' });
     cache.set(mint, { ts: Date.now(), data: fullResult });
-    if (quick) return res.json({ mint: mint, score: result.score, riskLevel: result.riskLevel, safe: result.score >= 55 });
+    if (quick) return res.json({ mint: mint, score: result.score, riskLevel: result.riskLevel, safe: result.score >= 55, confidence: getConfidence(tokenData), reasons: generateReasons(tokenData, result.breakdown) });
+    fullResult.confidence = getConfidence(tokenData);
+    fullResult.reasons = generateReasons(tokenData, result.breakdown);
     res.json(fullResult);
   } catch (error) {
     res.status(500).json({ error: 'Failed to score token', message: error.message });

@@ -5,6 +5,12 @@
 
 const { Connection, PublicKey } = require('@solana/web3.js');
 
+const MEGACAP_MINTS = new Set([
+  'So11111111111111111111111111111111111111112',
+  'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+  'Es9vMFrzaCERmKfrE1SBVRig18tc1WW8wMvm3oHij2wz',
+]);
+
 const SOLANA_RPC = process.env.SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
 const connection = new Connection(SOLANA_RPC, 'confirmed');
 
@@ -25,6 +31,10 @@ async function getTokenMintInfo(mintAddress) {
 }
 
 async function getHolderDistribution(mintAddress) {
+  if (MEGACAP_MINTS.has(mintAddress)) {
+    console.log('[SURVIVOR] Megacap denylist hit, skipping holder query');
+    return { totalHolders: null, top10HolderPercent: null, topHolders: [], note: 'MEGACAP_SKIP' };
+  }
   try {
     const mintPubkey = new PublicKey(mintAddress);
     const largestAccounts = await connection.getTokenLargestAccounts(mintPubkey);
@@ -51,7 +61,7 @@ async function getHolderDistribution(mintAddress) {
   } catch (error) {
     const msg = String(error?.message || error);
     // Handle mega-cap tokens gracefully
-    if (msg.includes('Too many accounts') || msg.includes('429')) {
+    if (msg.includes('Too many accounts') || msg.includes('429') || msg.includes('deprioritized')) {
       console.log(`[SURVIVOR] Mega-cap detected, using fallback for holder distribution`);
       return {
         totalHolders: null,
