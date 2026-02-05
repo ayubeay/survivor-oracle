@@ -1,15 +1,7 @@
-/**
- * SURVIVOR Token Monitor
- * Polls pump.fun for new token launches and auto-scores them.
- * Built by SURVIVOR Agent #598
- * v0.3.2: sanitized log output
- */
-
 const { Connection, PublicKey } = require('@solana/web3.js');
 const { fetchTokenData } = require('./fetcher');
 const { calculateSurvivalScore } = require('./scorer');
 const { saveScore, logMonitorEvent } = require('./database');
-const { sanitizeText } = require('./sanitizer');
 
 const SOLANA_RPC = process.env.SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
 const connection = new Connection(SOLANA_RPC, 'confirmed');
@@ -26,16 +18,15 @@ async function scoreNewToken(mintAddress) {
   try {
     console.log('[SURVIVOR] New token detected: ' + mintAddress);
     logMonitorEvent(mintAddress, 'DETECTED', 'New pump.fun token');
-    var tokenData = await fetchTokenData(mintAddress);
-    var result = calculateSurvivalScore(tokenData);
-    var entry = {
+    const tokenData = await fetchTokenData(mintAddress);
+    const result = calculateSurvivalScore(tokenData);
+    const entry = {
       mint: mintAddress, name: tokenData.name, symbol: tokenData.symbol,
       score: result.score, riskLevel: result.riskLevel, safe: result.score >= 55,
       breakdown: result.breakdown, liquidityUsd: tokenData.liquidityUsd,
       ageInHours: tokenData.ageInHours, holderNote: tokenData.holderNote,
       source: 'monitor', detectedAt: new Date().toISOString(),
     };
-    if (result.mode) entry.mode = result.mode;
     saveScore(entry);
     logMonitorEvent(mintAddress, 'SCORED', result.score + '/100 ' + result.riskLevel);
     recentScores.unshift(entry);
@@ -43,8 +34,7 @@ async function scoreNewToken(mintAddress) {
     var emoji = 'WARN';
     if (result.score >= 55) emoji = 'SAFE';
     else if (result.score < 35) emoji = 'DANGER';
-    var displayName = sanitizeText(tokenData.symbol || mintAddress.slice(0, 8));
-    console.log('[SURVIVOR] ' + emoji + ' ' + displayName + ': ' + result.score + '/100 ' + result.riskLevel);
+    console.log('[SURVIVOR] ' + emoji + ' ' + (tokenData.symbol || mintAddress.slice(0,8)) + ': ' + result.score + '/100 ' + result.riskLevel);
     return entry;
   } catch (error) {
     console.error('[SURVIVOR] Failed to score ' + mintAddress + ': ' + error.message);
