@@ -1,0 +1,19 @@
+{
+  "name": "survivor-oracle",
+  "version": "0.1.0",
+  "description": "Autonomous token risk oracle for Solana. Scores new tokens based on survival probability.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "score": "node src/cli.js"
+  },
+  "keywords": ["solana", "oracle", "risk", "tokens", "defi", "agent"],
+  "author": "SURVIVOR Agent #598",
+  "license": "MIT",
+  "dependencies": {
+    "@solana/web3.js": "^1.95.0",
+    "express": "^4.18.2",
+    "node-fetch": "^3.3.2"
+  }
+}
