@@ -1,3 +1,9 @@
+/**
+ * SURVIVOR Token Risk Oracle — Database Layer
+ * Built by SURVIVOR Agent #598
+ * v0.4.0: persistent dedup, agent activity log, feed filters
+ */
+
 const Database = require('better-sqlite3');
 const path = require('path');
 
@@ -27,6 +33,7 @@ db.exec(`
     source TEXT DEFAULT 'api',
     created_at TEXT DEFAULT (datetime('now'))
   );
+
   CREATE TABLE IF NOT EXISTS monitor_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     mint TEXT NOT NULL,
@@ -34,29 +41,46 @@ db.exec(`
     details TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   );
+
   CREATE INDEX IF NOT EXISTS idx_scores_mint ON scores(mint);
   CREATE INDEX IF NOT EXISTS idx_scores_created ON scores(created_at);
   CREATE INDEX IF NOT EXISTS idx_scores_risk ON scores(risk_level);
+  CREATE INDEX IF NOT EXISTS idx_monitor_event ON monitor_log(event);
 `);
 
-const insertScore = db.prepare('INSERT INTO scores (mint,name,symbol,score,risk_level,safe,mint_authority,freeze_authority,lp_locked,holder_concentration,dev_wallet,token_age,liquidity_depth,liquidity_usd,age_in_hours,holder_note,source) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+const insertScore = db.prepare(
+  'INSERT INTO scores (mint,name,symbol,score,risk_level,safe,mint_authority,freeze_authority,lp_locked,holder_concentration,dev_wallet,token_age,liquidity_depth,liquidity_usd,age_in_hours,holder_note,source) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+);
 const insertMonitorLog = db.prepare('INSERT INTO monitor_log (mint,event,details) VALUES (?,?,?)');
+const checkMintScored = db.prepare('SELECT 1 FROM scores WHERE mint = ? LIMIT 1');
 
 function saveScore(data) {
-  return insertScore.run(data.mint, data.name||null, data.symbol||null, data.score, data.riskLevel, data.safe?1:0, data.breakdown?.mintAuthority??null, data.breakdown?.freezeAuthority??null, data.breakdown?.lpLocked??null, data.breakdown?.holderConcentration??null, data.breakdown?.devWalletActivity??null, data.breakdown?.tokenAge??null, data.breakdown?.liquidityDepth??null, data.liquidityUsd||null, data.ageInHours||null, data.holderNote||null, data.source||'api');
+  return insertScore.run(
+    data.mint, data.name || null, data.symbol || null, data.score, data.riskLevel,
+    data.safe ? 1 : 0,
+    data.breakdown?.mintAuthority ?? null, data.breakdown?.freezeAuthority ?? null,
+    data.breakdown?.lpLocked ?? null, data.breakdown?.holderConcentration ?? null,
+    data.breakdown?.devWalletActivity ?? null, data.breakdown?.tokenAge ?? null,
+    data.breakdown?.liquidityDepth ?? null, data.liquidityUsd || null,
+    data.ageInHours || null, data.holderNote || null, data.source || 'api'
+  );
 }
 
 function logMonitorEvent(mint, event, details) {
-  return insertMonitorLog.run(mint, event, details||null);
+  return insertMonitorLog.run(mint, event, details || null);
 }
 
-function getScoreHistory(mint, limit=20) {
+function isMintScored(mint) {
+  return !!checkMintScored.get(mint);
+}
+
+function getScoreHistory(mint, limit = 20) {
   return db.prepare('SELECT * FROM scores WHERE mint=? ORDER BY created_at DESC LIMIT ?').all(mint, limit);
 }
 
-function getRecentScoresDB(limit=50, riskLevel=null) {
+function getRecentScoresDB(limit = 50, riskLevel = null) {
   const rows = db.prepare('SELECT * FROM scores ORDER BY created_at DESC LIMIT ?').all(limit);
-  return riskLevel ? rows.filter(s => s.risk_level === riskLevel) : rows;
+  return riskLevel ? rows.filter(function (s) { return s.risk_level === riskLevel; }) : rows;
 }
 
 function getStats() {
@@ -65,13 +89,60 @@ function getStats() {
   const avgScore = db.prepare('SELECT AVG(score) as avg FROM scores').get();
   const monitored = db.prepare('SELECT COUNT(DISTINCT mint) as count FROM monitor_log').get();
   const last24h = db.prepare("SELECT COUNT(*) as count FROM scores WHERE created_at > datetime('now', '-1 day')").get();
-  return { totalScored: total.count, averageScore: Math.round((avgScore.avg||0)*10)/10, byRiskLevel: byRisk, uniqueMonitored: monitored.count, last24h: last24h.count };
+  const skipped = db.prepare("SELECT COUNT(*) as count FROM monitor_log WHERE event = 'SKIPPED'").get();
+  const errors = db.prepare("SELECT COUNT(*) as count FROM monitor_log WHERE event = 'ERROR'").get();
+
+  return {
+    totalScored: total.count,
+    averageScore: Math.round((avgScore.avg || 0) * 10) / 10,
+    byRiskLevel: byRisk,
+    uniqueMonitored: monitored.count,
+    last24h: last24h.count,
+    skippedNonMints: skipped.count,
+    errors: errors.count,
+  };
 }
 
-function getExtremes(limit=5) {
+function getExtremes(limit = 5) {
   const safest = db.prepare('SELECT DISTINCT mint,name,symbol,score,risk_level,created_at FROM scores ORDER BY score DESC LIMIT ?').all(limit);
   const riskiest = db.prepare('SELECT DISTINCT mint,name,symbol,score,risk_level,created_at FROM scores ORDER BY score ASC LIMIT ?').all(limit);
   return { safest, riskiest };
 }
 
-module.exports = { db, saveScore, logMonitorEvent, getScoreHistory, getRecentScoresDB, getStats, getExtremes };
+function getScoreDistribution() {
+  return db.prepare(`
+    SELECT
+      CASE
+        WHEN score >= 75 THEN 'LOW'
+        WHEN score >= 55 THEN 'MEDIUM'
+        WHEN score >= 35 THEN 'HIGH'
+        WHEN score >= 20 THEN 'VERY_HIGH'
+        ELSE 'EXTREME'
+      END as bucket,
+      COUNT(*) as count,
+      ROUND(AVG(score), 1) as avg_score
+    FROM scores
+    GROUP BY bucket
+    ORDER BY avg_score DESC
+  `).all();
+}
+
+function getHourlyActivity() {
+  return db.prepare(`
+    SELECT
+      strftime('%Y-%m-%dT%H:00:00Z', created_at) as hour,
+      COUNT(*) as count,
+      ROUND(AVG(score), 1) as avg_score,
+      MIN(score) as min_score,
+      MAX(score) as max_score
+    FROM scores
+    WHERE created_at > datetime('now', '-24 hours')
+    GROUP BY hour
+    ORDER BY hour ASC
+  `).all();
+}
+
+module.exports = {
+  db, saveScore, logMonitorEvent, isMintScored, getScoreHistory,
+  getRecentScoresDB, getStats, getExtremes, getScoreDistribution, getHourlyActivity,
+};

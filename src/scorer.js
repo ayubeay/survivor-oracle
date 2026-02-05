@@ -2,7 +2,7 @@
  * SURVIVOR Token Risk Scorer
  * Score ranges from 0 (extreme risk) to 100 (low risk).
  * Built by SURVIVOR Agent #598
- * v0.3.2: megacap context mode, cleaner reasons
+ * v0.4.0: penalize missing holder data, improved confidence model
  */
 
 const WEIGHTS = {
@@ -15,8 +15,13 @@ const WEIGHTS = {
   liquidityDepth: 10,
 };
 
-function scoreMintAuthority(revoked) { return revoked ? 100 : 0; }
-function scoreFreezeAuthority(revoked) { return revoked ? 100 : 0; }
+function scoreMintAuthority(revoked) {
+  return revoked ? 100 : 0;
+}
+
+function scoreFreezeAuthority(revoked) {
+  return revoked ? 100 : 0;
+}
 
 function scoreLpLocked(lpInfo) {
   if (!lpInfo || !lpInfo.locked) return 0;
@@ -26,7 +31,7 @@ function scoreLpLocked(lpInfo) {
 }
 
 function scoreHolderConcentration(top10Percent) {
-  if (top10Percent === null || top10Percent === undefined) return 70;
+  if (top10Percent === null || top10Percent === undefined) return 30;
   if (top10Percent <= 20) return 100;
   if (top10Percent <= 35) return 80;
   if (top10Percent <= 50) return 60;
@@ -69,20 +74,13 @@ function calculateSurvivalScore(tokenData) {
   if (tokenData.megacap) {
     var mc = tokenData.megacap;
     return {
-      score: mc.baseScore,
-      riskLevel: mc.riskLevel,
-      mode: mc.mode,
+      score: mc.baseScore, riskLevel: mc.riskLevel, mode: mc.mode,
       breakdown: {
-        mintAuthority: 'N/A',
-        freezeAuthority: 'N/A',
-        lpLocked: 'N/A',
-        holderConcentration: 'N/A',
-        devWalletActivity: 'N/A',
-        tokenAge: 100,
-        liquidityDepth: 100,
+        mintAuthority: 'N/A', freezeAuthority: 'N/A', lpLocked: 'N/A',
+        holderConcentration: 'N/A', devWalletActivity: 'N/A',
+        tokenAge: 100, liquidityDepth: 100,
       },
-      weights: WEIGHTS,
-      timestamp: new Date().toISOString(),
+      weights: WEIGHTS, timestamp: new Date().toISOString(),
     };
   }
 
@@ -120,12 +118,14 @@ function generateReasons(tokenData, breakdown) {
   if (tokenData.megacap) {
     return tokenData.megacap.reasons || ['MEGACAP_TOKEN', 'ESTABLISHED'];
   }
-
   var reasons = [];
   if (breakdown.mintAuthority === 0) reasons.push('MINT_AUTH_ACTIVE');
   if (breakdown.freezeAuthority === 0) reasons.push('FREEZE_AUTH_ACTIVE');
   if (breakdown.lpLocked === 0) reasons.push('LP_NOT_LOCKED');
   if (breakdown.holderConcentration <= 20) reasons.push('HIGH_CONCENTRATION');
+  if (breakdown.holderConcentration === 30 && (tokenData.top10HolderPercent === null || tokenData.top10HolderPercent === undefined)) {
+    reasons.push('HOLDER_DATA_UNAVAILABLE');
+  }
   if (breakdown.tokenAge <= 15) reasons.push('VERY_NEW');
   if (breakdown.liquidityDepth <= 20) reasons.push('LOW_LIQUIDITY');
   if (breakdown.mintAuthority === 100) reasons.push('MINT_REVOKED');
@@ -139,6 +139,7 @@ function getConfidence(tokenData) {
   if (tokenData.megacap) return 'HIGH';
   var confidence = 'HIGH';
   if (tokenData.holderNote === 'MEGACAP_SKIP' || tokenData.holderNote === 'MEGA_CAP_FALLBACK') confidence = 'MEDIUM';
+  if (tokenData.holderNote === 'HOLDER_QUERY_FAILED') confidence = 'LOW';
   if (tokenData.holderNote === 'NOT_A_TOKEN_MINT' || tokenData.holderNote === 'ACCOUNT_NOT_FOUND') confidence = 'LOW';
   if (tokenData.liquidityUsd === 0 && tokenData.ageInHours === 0) confidence = 'LOW';
   return confidence;

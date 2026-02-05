@@ -1,5 +1,7 @@
-// src/sanitizer.js — Token metadata sanitizer for SURVIVOR Oracle
-// Drop this file into src/ and import where needed
+/**
+ * SURVIVOR Oracle — Token Metadata Sanitizer
+ * Built by SURVIVOR Agent #598
+ */
 
 const OFFENSIVE_PATTERNS = [
   /\bnigg(a|er|ers|as|az)\b/gi,
@@ -23,7 +25,6 @@ function sanitizeText(s) {
   return out;
 }
 
-// Sanitize an entire token data object (name, symbol, description)
 function sanitizeTokenData(token) {
   if (!token) return token;
   return {
