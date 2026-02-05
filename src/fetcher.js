@@ -92,7 +92,13 @@ async function getHolderDistribution(mintAddress) {
 
   try {
     var mintPubkey = new PublicKey(mintAddress);
-    var largestAccounts = await connection.getTokenLargestAccounts(mintPubkey);
+    var largestAccounts;
+    try {
+      largestAccounts = await connection.getTokenLargestAccounts(mintPubkey);
+    } catch (lErr) {
+      console.log("[SURVIVOR] Holder query failed for " + mintAddress.slice(0, 16) + "..., using fallback");
+      return { totalHolders: null, top10HolderPercent: null, topHolders: [], note: "HOLDER_QUERY_FAILED" };
+    }
 
     if (!largestAccounts.value || largestAccounts.value.length === 0) {
       return { totalHolders: 0, top10HolderPercent: 100, topHolders: [] };
