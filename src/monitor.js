@@ -2,11 +2,11 @@
  * SURVIVOR Token Monitor
  * Polls pump.fun for new token launches and auto-scores them.
  * Built by SURVIVOR Agent #598
- * v0.3.2: sanitized log output
+ * v0.3.2: sanitized log output, mint validation gate
  */
 
 const { Connection, PublicKey } = require('@solana/web3.js');
-const { fetchTokenData } = require('./fetcher');
+const { fetchTokenData, validateMint } = require('./fetcher');
 const { calculateSurvivalScore } = require('./scorer');
 const { saveScore, logMonitorEvent } = require('./database');
 const { sanitizeText } = require('./sanitizer');
@@ -24,8 +24,17 @@ async function scoreNewToken(mintAddress) {
   if (scoredMints.has(mintAddress)) return null;
   scoredMints.add(mintAddress);
   try {
-    console.log('[SURVIVOR] New token detected: ' + mintAddress);
-    logMonitorEvent(mintAddress, 'DETECTED', 'New pump.fun token');
+    console.log('[SURVIVOR] New address detected: ' + mintAddress);
+
+    var mintCheck = await validateMint(mintAddress);
+    if (!mintCheck.valid) {
+      console.log('[SURVIVOR] Skipped non-mint ' + mintAddress.slice(0, 16) + '... (' + mintCheck.reason + ')');
+      logMonitorEvent(mintAddress, 'SKIPPED', mintCheck.reason);
+      return null;
+    }
+
+    console.log('[SURVIVOR] Confirmed mint: ' + mintAddress);
+    logMonitorEvent(mintAddress, 'DETECTED', 'Confirmed pump.fun mint');
     var tokenData = await fetchTokenData(mintAddress);
     var result = calculateSurvivalScore(tokenData);
     var entry = {

@@ -100,7 +100,7 @@ SOLANA_RPC="https://mainnet.helius-rpc.com/?api-key=YOUR_KEY" npm start
 
 - 86+ tokens scored autonomously in first hour
 - Average risk score: 42.2/100 across pump.fun tokens
-- 0.3% of pump.fun tokens survive long-term (research data)
+- Most new tokens fail quickly; SURVIVOR scores survival risk in real time
 - Zero manual intervention required
 
 ## Built By

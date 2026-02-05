@@ -53,6 +53,9 @@ async function validateMint(mintAddress) {
     if (owner !== TOKEN_PROGRAM_ID && owner !== TOKEN_2022_PROGRAM_ID) {
       return { valid: false, reason: 'NOT_A_TOKEN_MINT', owner: owner };
     }
+    if (owner === TOKEN_PROGRAM_ID && info.data.length !== 82) {
+      return { valid: false, reason: 'NOT_A_MINT_ACCOUNT', size: info.data.length };
+    }
     return { valid: true };
   } catch (err) {
     return { valid: false, reason: 'VALIDATION_ERROR', error: err.message };
