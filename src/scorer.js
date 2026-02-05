@@ -25,9 +25,14 @@ function scoreLpLocked(lpInfo) {
 }
 
 function scoreHolderConcentration(top10Percent) {
-  if (top10Percent <= 30) return 100;
-  if (top10Percent >= 90) return 0;
-  return Math.round(100 - ((top10Percent - 30) / 60) * 100);
+  // Null = mega-cap or unknown, assume distributed (safer)
+  if (top10Percent === null || top10Percent === undefined) return 70;
+  if (top10Percent <= 20) return 100;
+  if (top10Percent <= 35) return 80;
+  if (top10Percent <= 50) return 60;
+  if (top10Percent <= 70) return 40;
+  if (top10Percent <= 85) return 20;
+  return 10;
 }
 
 function scoreDevWalletActivity(devActivity) {
@@ -40,8 +45,10 @@ function scoreDevWalletActivity(devActivity) {
 }
 
 function scoreTokenAge(hours) {
-  if (hours < 1) return 10;
-  if (hours < 6) return 30;
+  if (hours < 1) return 5;
+  if (hours < 3) return 15;
+  if (hours < 6) return 25;
+  if (hours < 12) return 35;
   if (hours < 24) return 50;
   if (hours < 72) return 70;
   if (hours < 168) return 85;
@@ -49,9 +56,10 @@ function scoreTokenAge(hours) {
 }
 
 function scoreLiquidityDepth(usd) {
-  if (usd < 1000) return 10;
-  if (usd < 5000) return 30;
-  if (usd < 10000) return 50;
+  if (usd < 1000) return 5;
+  if (usd < 5000) return 20;
+  if (usd < 10000) return 40;
+  if (usd < 25000) return 55;
   if (usd < 50000) return 70;
   if (usd < 100000) return 85;
   return 100;
@@ -62,7 +70,7 @@ function calculateSurvivalScore(tokenData) {
     mintAuthority: scoreMintAuthority(tokenData.mintAuthorityRevoked),
     freezeAuthority: scoreFreezeAuthority(tokenData.freezeAuthorityRevoked),
     lpLocked: scoreLpLocked(tokenData.lpInfo),
-    holderConcentration: scoreHolderConcentration(tokenData.top10HolderPercent || 80),
+    holderConcentration: scoreHolderConcentration(tokenData.top10HolderPercent),
     devWalletActivity: scoreDevWalletActivity(tokenData.devActivity),
     tokenAge: scoreTokenAge(tokenData.ageInHours || 0),
     liquidityDepth: scoreLiquidityDepth(tokenData.liquidityUsd || 0),
@@ -79,9 +87,9 @@ function calculateSurvivalScore(tokenData) {
 
   const score = Math.round(totalScore);
   let riskLevel;
-  if (score >= 80) riskLevel = 'LOW';
-  else if (score >= 60) riskLevel = 'MEDIUM';
-  else if (score >= 40) riskLevel = 'HIGH';
+  if (score >= 75) riskLevel = 'LOW';
+  else if (score >= 55) riskLevel = 'MEDIUM';
+  else if (score >= 35) riskLevel = 'HIGH';
   else if (score >= 20) riskLevel = 'VERY_HIGH';
   else riskLevel = 'EXTREME';
 

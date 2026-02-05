@@ -1,55 +1,116 @@
 /**
- * SURVIVOR Oracle API Server
+ * SURVIVOR Oracle API + Monitor
  * Built by SURVIVOR Agent #598
  */
 
 const express = require('express');
 const { fetchTokenData } = require('./fetcher');
-const { calculateSurvivalScore } = require('./scorer');
+const { calculateSurvivalScore, WEIGHTS } = require('./scorer');
+const { startMonitor, getRecentScores } = require('./monitor');
 
 const app = express();
-app.use(express.json());
+const PORT = process.env.PORT || 3000;
 
-const scoreCache = new Map();
+// Cache
+const cache = new Map();
 const CACHE_TTL = 5 * 60 * 1000;
-const stats = { totalQueries: 0, uniqueTokens: new Set(), startedAt: new Date().toISOString() };
+let totalScored = 0;
 
-async function getScore(mintAddress) {
-  const cached = scoreCache.get(mintAddress);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) return { ...cached.data, cached: true };
-  const tokenData = await fetchTokenData(mintAddress);
-  const score = calculateSurvivalScore(tokenData);
-  scoreCache.set(mintAddress, { data: { token: tokenData, score }, timestamp: Date.now() });
-  stats.totalQueries++;
-  stats.uniqueTokens.add(mintAddress);
-  return { token: tokenData, score, cached: false };
-}
-
+// Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'healthy', agent: 'SURVIVOR #598', version: '0.1.0' });
+  res.json({
+    status: 'healthy',
+    agent: 'SURVIVOR #598',
+    version: '0.2.0',
+    monitoring: true,
+    totalScored,
+    recentDetections: getRecentScores().length,
+  });
 });
 
+// Score a token
 app.get('/score/:mint', async (req, res) => {
   try {
-    const { mint } = req.params;
-    if (!mint || mint.length < 32) return res.status(400).json({ error: 'Invalid mint address' });
-    console.log(`[SURVIVOR] Scoring token: ${mint}`);
-    const result = await getScore(mint);
-    if (req.query.quick === 'true') {
-      return res.json({ mint, score: result.score.score, riskLevel: result.score.riskLevel, safe: result.score.score >= 60 });
+    const mint = req.params.mint;
+    const quick = req.query.quick === 'true';
+
+    // Check cache
+    const cached = cache.get(mint);
+    if (cached && Date.now() - cached.ts < CACHE_TTL) {
+      if (quick) {
+        return res.json({ mint, score: cached.data.score, riskLevel: cached.data.riskLevel, safe: cached.data.score >= 55, cached: true });
+      }
+      return res.json(cached.data);
     }
-    res.json(result);
+
+    const tokenData = await fetchTokenData(mint);
+    const result = calculateSurvivalScore(tokenData);
+    totalScored++;
+
+    const fullResult = {
+      mint,
+      name: tokenData.name,
+      symbol: tokenData.symbol,
+      score: result.score,
+      riskLevel: result.riskLevel,
+      safe: result.score >= 55,
+      breakdown: result.breakdown,
+      weights: result.weights,
+      holderNote: tokenData.holderNote,
+      liquidityUsd: tokenData.liquidityUsd,
+      ageInHours: tokenData.ageInHours,
+      timestamp: result.timestamp,
+    };
+
+    cache.set(mint, { ts: Date.now(), data: fullResult });
+
+    if (quick) {
+      return res.json({ mint, score: result.score, riskLevel: result.riskLevel, safe: result.score >= 55 });
+    }
+    res.json(fullResult);
   } catch (error) {
-    console.error(`[SURVIVOR] Error:`, error.message);
     res.status(500).json({ error: 'Failed to score token', message: error.message });
   }
 });
 
+// Stats
 app.get('/stats', (req, res) => {
-  res.json({ agent: 'SURVIVOR #598', totalQueries: stats.totalQueries, uniqueTokens: stats.uniqueTokens.size, startedAt: stats.startedAt });
+  res.json({
+    agent: 'SURVIVOR #598',
+    version: '0.2.0',
+    totalScored,
+    cacheSize: cache.size,
+    recentDetections: getRecentScores().length,
+    uptime: process.uptime(),
+    weights: WEIGHTS,
+  });
 });
 
-const PORT = process.env.PORT || 3000;
+// Recent auto-scored tokens from monitor
+app.get('/recent', (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+  const scores = getRecentScores().slice(0, limit);
+  res.json({ count: scores.length, tokens: scores });
+});
+
+// Feed endpoint (for other agents)
+app.get('/feed', (req, res) => {
+  const minScore = parseInt(req.query.minScore) || 0;
+  const maxScore = parseInt(req.query.maxScore) || 100;
+  const riskLevel = req.query.risk;
+
+  let tokens = getRecentScores();
+  tokens = tokens.filter(t => t.score >= minScore && t.score <= maxScore);
+  if (riskLevel) tokens = tokens.filter(t => t.riskLevel === riskLevel.toUpperCase());
+
+  res.json({ count: tokens.length, tokens });
+});
+
+// Start server + monitor
 app.listen(PORT, () => {
-  console.log(`\n🛡️  SURVIVOR Oracle v0.1.0 running on http://localhost:${PORT}\n`);
+  console.log(`\n🛡️  SURVIVOR Oracle v0.2.0 running on http://localhost:${PORT}`);
+  console.log(`📡 Endpoints: /health, /score/:mint, /stats, /recent, /feed\n`);
+
+  // Start pump.fun monitor
+  startMonitor('poll');
 });
