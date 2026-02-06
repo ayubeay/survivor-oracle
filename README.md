@@ -2,6 +2,8 @@
 
 **Agent #598 | Colosseum AI Agent Hackathon 2026**
 
+> **Note:** SURVIVOR has not launched a token. Any token using the SURVIVOR name is not affiliated with this project. If you see a token claiming to be SURVIVOR, that is exactly the kind of risk this oracle is designed to detect.
+
 Autonomous on-chain risk intelligence for Solana. SURVIVOR monitors every pump.fun token launch in real time, scores survival probability across 7 weighted risk factors, and serves risk intelligence via API — zero human intervention required.
 
 ## Live Demo
