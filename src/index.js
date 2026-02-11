@@ -11,11 +11,12 @@ const { calculateSurvivalScore, generateReasons, getConfidence, WEIGHTS, ENGINE,
 const { startMonitor, getRecentScores, getMonitorStats } = require('./monitor');
 const { startRescorer, getRescoreStats } = require("./rescorer");
 const { saveScore, getScoreHistory, getRecentScoresDB, getStats, getExtremes, getScoreDistribution, getHourlyActivity, getScoreHistoryPhase2 } = require('./database');
+const { fetchRugCheck } = require("./rugcheck");
 const { sanitizeText } = require('./sanitizer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const VERSION = '0.4.0';
+const VERSION = '0.4.1';
 
 const cache = new Map();
 const CACHE_TTL = 5 * 60 * 1000;
@@ -106,6 +107,20 @@ app.get('/score/:mint', async function (req, res) {
     cache.set(mint, { ts: Date.now(), data: fullResult });
     var response = Object.assign({}, fullResult);
     delete response._tokenData;
+    // Phase 3: external signals (opt-in via ?ext=true)
+    if (req.query.ext === 'true') {
+      var rugResult = await fetchRugCheck(mint);
+      response.external_signals = { rugcheck: rugResult };
+      if (rugResult.available) {
+        var survivorVerdict = response.risk_tier;
+        var rugVerdict = rugResult.verdict;
+        response.agreement = {
+          survivor: survivorVerdict,
+          rugcheck: rugVerdict,
+          status: survivorVerdict === rugVerdict ? 'AGREE' : 'DISAGREE',
+        };
+      }
+    }
     res.json(response);
   } catch (error) {
     res.status(500).json({ error: 'Failed to score token', message: error.message });
