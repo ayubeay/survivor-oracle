@@ -47,7 +47,7 @@ app.get('/health', function (req, res) {
     monitoring: true, persistence: 'sqlite', pumpFilter: true, persistentDedup: true,
     totalScored: stats.totalScored, averageScore: stats.averageScore,
     last24h: stats.last24h, skippedNonMints: stats.skippedNonMints,
-    monitor: monStats, recentDetections: getRecentScores().length,
+    monitor: monStats, rescore: getRescoreStats(), recentDetections: getRecentScores().length,
     uptime: formatUptime(process.uptime()),
   });
 });
