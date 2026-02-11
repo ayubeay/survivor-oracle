@@ -87,7 +87,7 @@ app.get('/score/:mint', async function (req, res) {
       reasons: structuredReasons,
       meta: meta,
       riskLevel: result.riskLevel,
-      breakdown: result.breakdown, weights: result.weights,
+      breakdown: result.breakdown,
       holderNote: tokenData.holderNote, liquidityUsd: tokenData.liquidityUsd,
       ageInHours: tokenData.ageInHours, timestamp: result.timestamp,
       _tokenData: tokenData,
@@ -95,6 +95,7 @@ app.get('/score/:mint', async function (req, res) {
     if (result.mode) fullResult.mode = result.mode;
     if (!quick) {
       fullResult.feature_snapshot = buildFeatureSnapshot(result.breakdown, tokenData);
+      if (req.query.debug === "true") fullResult.weights = result.weights;
       fullResult.legacyReasons = generateReasons(tokenData, result.breakdown);
       fullResult.legacyConfidence = getConfidence(tokenData);
     }
@@ -111,6 +112,9 @@ app.get('/score/:mint', async function (req, res) {
     if (req.query.ext === 'true') {
       var rugResult = await fetchRugCheck(mint);
       response.external_signals = { rugcheck: rugResult };
+      if ((tokenData || {}).ageInHours != null && tokenData.ageInHours < 0.2) {
+        response.meta.caveats.push("External engine signals may be incomplete for fresh tokens; treat as advisory.");
+      }
       if (rugResult.available) {
         var survivorVerdict = response.risk_tier;
         var rugVerdict = rugResult.verdict;
@@ -165,7 +169,7 @@ app.get('/stats', function (req, res) {
     byRiskLevel: stats.byRiskLevel, distribution: distribution,
     uniqueMonitored: stats.uniqueMonitored, last24h: stats.last24h,
     skippedNonMints: stats.skippedNonMints, errors: stats.errors,
-    extremes: extremes, monitor: monStats, weights: WEIGHTS,
+    extremes: extremes, monitor: monStats,
     uptimeSeconds: Math.floor(process.uptime()), uptime: formatUptime(process.uptime()),
   });
 });
