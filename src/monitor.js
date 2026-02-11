@@ -8,7 +8,7 @@
 const { Connection, PublicKey } = require('@solana/web3.js');
 const { fetchTokenData, validateMint } = require('./fetcher');
 const { calculateSurvivalScore } = require('./scorer');
-const { saveScore, logMonitorEvent, isMintScored } = require('./database');
+const { saveScore, logMonitorEvent, isMintScored, saveScoreHistory, scheduleRescores } = require('./database');
 const { sanitizeText } = require('./sanitizer');
 
 const SOLANA_RPC = process.env.SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
@@ -71,6 +71,21 @@ async function scoreNewToken(mintAddress) {
     if (result.mode) entry.mode = result.mode;
 
     saveScore(entry);
+
+    // Phase 2: save initial score to history + schedule rescores
+    try {
+      const { getConfidenceFloat, SCORING_VERSION, MODEL_VERSION, buildStructuredReasons } = require("./scorer");
+      const structuredReasons = buildStructuredReasons(result.breakdown, tokenData);
+      saveScoreHistory({
+        mint: mintAddress, score: result.score, riskLevel: result.riskLevel,
+        confidence: getConfidenceFloat(tokenData),
+        modelVersion: MODEL_VERSION, scoringVersion: SCORING_VERSION,
+        reasonCodes: structuredReasons.map(r => r.code),
+        scoreDelta: null, volatilityFlag: false, baitAndSwitchFlag: false,
+        rescoreWindow: "initial",
+      });
+      scheduleRescores(mintAddress);
+    } catch (e) { console.error("[RESCORE] Init error: " + e.message); }
     logMonitorEvent(mintAddress, 'SCORED', result.score + '/100 ' + result.riskLevel);
     recentScores.unshift(entry);
     if (recentScores.length > MAX_RECENT) recentScores.pop();

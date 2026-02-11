@@ -142,7 +142,114 @@ function getHourlyActivity() {
   `).all();
 }
 
+
+// =========================================================
+// PHASE 2: Temporal rescoring + volatility detection
+// =========================================================
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS score_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    mint TEXT NOT NULL,
+    score INTEGER NOT NULL,
+    risk_level TEXT NOT NULL,
+    confidence REAL,
+    model_version TEXT,
+    scoring_version TEXT,
+    reason_codes TEXT,
+    score_delta INTEGER,
+    volatility_flag INTEGER DEFAULT 0,
+    bait_and_switch_flag INTEGER DEFAULT 0,
+    rescore_window TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS rescore_queue (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    mint TEXT NOT NULL,
+    scheduled_at TEXT NOT NULL,
+    window TEXT NOT NULL,
+    completed INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_history_mint ON score_history(mint);
+  CREATE INDEX IF NOT EXISTS idx_history_created ON score_history(created_at);
+  CREATE INDEX IF NOT EXISTS idx_rescore_scheduled ON rescore_queue(scheduled_at);
+  CREATE INDEX IF NOT EXISTS idx_rescore_completed ON rescore_queue(completed);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_rescore_unique ON rescore_queue(mint, window);
+`);
+
+const insertScoreHistory = db.prepare(
+  'INSERT INTO score_history (mint,score,risk_level,confidence,model_version,scoring_version,reason_codes,score_delta,volatility_flag,bait_and_switch_flag,rescore_window) VALUES (?,?,?,?,?,?,?,?,?,?,?)'
+);
+
+const insertRescoreQueue = db.prepare(
+  'INSERT OR IGNORE INTO rescore_queue (mint,scheduled_at,window) VALUES (?,?,?)'
+);
+
+const markRescoreComplete = db.prepare(
+  'UPDATE rescore_queue SET completed=1 WHERE id=?'
+);
+
+const getDueRescores = db.prepare(
+  "SELECT * FROM rescore_queue WHERE completed=0 AND scheduled_at <= datetime('now') ORDER BY scheduled_at ASC LIMIT 10"
+);
+
+const getLastScoreForMint = db.prepare(
+  'SELECT score, risk_level, created_at FROM score_history WHERE mint=? ORDER BY created_at DESC LIMIT 1'
+);
+
+const getScoreHistoryV2 = db.prepare(
+  'SELECT * FROM score_history WHERE mint=? ORDER BY created_at DESC LIMIT ?'
+);
+
+function saveScoreHistory(data) {
+  return insertScoreHistory.run(
+    data.mint, data.score, data.riskLevel, data.confidence || null,
+    data.modelVersion || null, data.scoringVersion || null,
+    data.reasonCodes ? JSON.stringify(data.reasonCodes) : null,
+    data.scoreDelta ?? null, data.volatilityFlag ? 1 : 0,
+    data.baitAndSwitchFlag ? 1 : 0, data.rescoreWindow || 'initial'
+  );
+}
+
+function scheduleRescores(mint) {
+  const now = Date.now();
+  const windows = [
+    { offset: 5 * 60 * 1000, label: '5m' },
+    { offset: 30 * 60 * 1000, label: '30m' },
+    { offset: 2 * 60 * 60 * 1000, label: '2h' },
+  ];
+  for (const w of windows) {
+    const scheduledAt = new Date(now + w.offset)
+      .toISOString()
+      .slice(0, 19)
+      .replace('T', ' ');
+    insertRescoreQueue.run(mint, scheduledAt, w.label);
+  }
+}
+
+function getDueRescoresList() {
+  return getDueRescores.all();
+}
+
+function completeRescore(id) {
+  return markRescoreComplete.run(id);
+}
+
+function getLastScore(mint) {
+  return getLastScoreForMint.get(mint);
+}
+
+function getScoreHistoryPhase2(mint, limit = 20) {
+  return getScoreHistoryV2.all(mint, limit);
+}
+
 module.exports = {
   db, saveScore, logMonitorEvent, isMintScored, getScoreHistory,
   getRecentScoresDB, getStats, getExtremes, getScoreDistribution, getHourlyActivity,
+  // Phase 2
+  saveScoreHistory, scheduleRescores, getDueRescoresList, completeRescore,
+  getLastScore, getScoreHistoryPhase2,
 };

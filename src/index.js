@@ -9,6 +9,7 @@ const express = require('express');
 const { fetchTokenData } = require('./fetcher');
 const { calculateSurvivalScore, generateReasons, getConfidence, WEIGHTS, ENGINE, SCORING_VERSION, MODEL_VERSION, buildStructuredReasons, getConfidenceFloat, buildMeta, buildFeatureSnapshot, normalizeRiskTier } = require('./scorer');
 const { startMonitor, getRecentScores, getMonitorStats } = require('./monitor');
+const { startRescorer, getRescoreStats } = require("./rescorer");
 const { saveScore, getScoreHistory, getRecentScoresDB, getStats, getExtremes, getScoreDistribution, getHourlyActivity } = require('./database');
 const { sanitizeText } = require('./sanitizer');
 
@@ -217,4 +218,5 @@ app.listen(PORT, function () {
   console.log('Endpoints: /health /score/:mint /history/:mint /stats /recent /db/recent /feed /feed/latest /activity');
   console.log('');
   startMonitor('poll');
+  startRescorer(30000);
 });
