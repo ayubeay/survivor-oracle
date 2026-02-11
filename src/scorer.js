@@ -145,4 +145,115 @@ function getConfidence(tokenData) {
   return confidence;
 }
 
-module.exports = { calculateSurvivalScore, generateReasons, getConfidence, WEIGHTS };
+
+// =========================================================
+// PHASE 1: Structured reason codes, float confidence, meta
+// v0.4.1 — zero changes to scoring math above
+// =========================================================
+
+const ENGINE = "survivor.oracle";
+const SCORING_VERSION = "0.4.1";
+const MODEL_VERSION = "scoring-v3";
+
+const CONTRIBUTION_BUCKETS = [0.10, 0.15, 0.20, 0.25, 0.30];
+
+function bucketContribution(x) {
+  if (x == null) return undefined;
+  const v = Math.max(0, Math.min(1, Number(x)));
+  let best = CONTRIBUTION_BUCKETS[0];
+  let bestDiff = Math.abs(v - best);
+  for (const c of CONTRIBUTION_BUCKETS) {
+    const d = Math.abs(v - c);
+    if (d < bestDiff) { best = c; bestDiff = d; }
+  }
+  return best;
+}
+
+function buildStructuredReasons(breakdown, tokenData) {
+  if (tokenData.megacap) {
+    return [{ code: "MEGACAP_TOKEN", severity: "low", signal: "onchain", detail: "Recognized megacap/native asset", contribution: 0.30 }];
+  }
+  const b = breakdown || {};
+  const ageInHours = tokenData.ageInHours || 0;
+  const holderNote = tokenData.holderNote;
+  const reasons = [];
+
+  if (b.mintAuthority === 0) {
+    reasons.push({ code: "MINT_AUTHORITY_PRESENT", severity: "high", signal: "onchain", detail: "Mint authority is still active (not revoked)", contribution: bucketContribution(0.18) });
+  }
+  if (b.freezeAuthority === 0) {
+    reasons.push({ code: "FREEZE_AUTHORITY_PRESENT", severity: "high", signal: "onchain", detail: "Freeze authority is still active (not revoked)", contribution: bucketContribution(0.13) });
+  }
+  if (b.lpLocked != null && b.lpLocked < 20) {
+    reasons.push({ code: "LP_UNLOCKED", severity: "high", signal: "dex", detail: b.lpLocked === 0 ? "No LP lock detected" : "LP lock is weak or partial", contribution: bucketContribution(0.22) });
+  }
+  if (b.liquidityDepth != null && b.liquidityDepth < 20) {
+    const liqUsd = tokenData.liquidityUsd || 0;
+    reasons.push({ code: "NO_LIQUIDITY", severity: "high", signal: "dex", detail: liqUsd === 0 ? "No liquidity detected" : "Liquidity is very thin (~$" + liqUsd.toLocaleString() + ")", contribution: bucketContribution(0.18) });
+  }
+  if (b.holderConcentration != null && b.holderConcentration <= 30) {
+    const isDataMissing = holderNote === "HOLDER_QUERY_FAILED" || (tokenData.top10HolderPercent === null || tokenData.top10HolderPercent === undefined);
+    reasons.push({ code: "HOLDER_CONCENTRATION", severity: "high", signal: "onchain", detail: isDataMissing ? "Holder data unavailable; assuming concentrated supply" : "Top holder concentration is high", contribution: bucketContribution(0.16) });
+  }
+  if (b.tokenAge != null && b.tokenAge <= 15) {
+    let detail;
+    if (ageInHours < 0.017) detail = "Token created less than 1 minute ago";
+    else if (ageInHours < 0.10) detail = "Token created less than 6 minutes ago";
+    else if (ageInHours < 1) detail = "Token is ~" + Math.round(ageInHours * 60) + " minutes old";
+    else detail = "Token is ~" + ageInHours.toFixed(1) + " hours old";
+    reasons.push({ code: "FRESH_MINT", severity: "medium", signal: "onchain", detail: detail, contribution: bucketContribution(0.10) });
+  }
+
+  return reasons.sort((a, c) => (c.contribution || 0) - (a.contribution || 0)).slice(0, 6);
+}
+
+function getConfidenceFloat(tokenData) {
+  if (tokenData.megacap) return 0.90;
+  let conf = 0.85;
+  if (tokenData.holderNote === 'HOLDER_QUERY_FAILED') conf -= 0.25;
+  if (tokenData.holderNote === 'NOT_A_TOKEN_MINT' || tokenData.holderNote === 'ACCOUNT_NOT_FOUND') conf -= 0.30;
+  if (tokenData.holderNote === 'MEGACAP_SKIP' || tokenData.holderNote === 'MEGA_CAP_FALLBACK') conf -= 0.15;
+  if (tokenData.liquidityUsd === 0 && (tokenData.ageInHours || 0) === 0) conf -= 0.15;
+  return Math.round(Math.max(0.20, conf) * 100) / 100;
+}
+
+function normalizeRiskTier(riskLevel) {
+  switch ((riskLevel || "").toUpperCase()) {
+    case "LOW": return "LOW";
+    case "MEDIUM": return "MEDIUM";
+    case "HIGH": case "VERY_HIGH": case "EXTREME": return "HIGH";
+    default: return "UNKNOWN";
+  }
+}
+
+function ageBucket(h) { if (h == null) return "unknown"; if (h < 0.10) return "<6m"; if (h < 1) return "<1h"; if (h < 6) return "<6h"; if (h < 24) return "<24h"; return ">=24h"; }
+function liquidityBucket(u) { if (u == null) return "unknown"; if (u <= 0) return "$0"; if (u < 500) return "<$500"; if (u < 5000) return "<$5k"; if (u < 50000) return "<$50k"; return ">=$50k"; }
+function holderBucket(s) { if (s == null) return "unknown"; if (s <= 20) return "very_concentrated"; if (s <= 40) return "concentrated"; if (s <= 60) return "moderate"; return "distributed"; }
+
+function buildCaveats(tokenData) {
+  const caveats = ["Score based on on-chain signals; no off-chain intelligence applied."];
+  if ((tokenData.ageInHours || 0) < 0.1667) caveats.push("Token age < 10 minutes; confidence may improve with rescoring.");
+  if (tokenData.holderNote === "HOLDER_QUERY_FAILED") caveats.push("Holder data unavailable; holder concentration is estimated.");
+  if (tokenData.liquidityUsd === 0) caveats.push("No liquidity data found; token may not be tradeable yet.");
+  return caveats;
+}
+
+function buildMeta(tokenData, structuredReasons) {
+  const sources = new Set(["onchain"]);
+  for (const r of structuredReasons) { if (r.signal) sources.add(r.signal); }
+  return {
+    scored_at: tokenData.timestamp || new Date().toISOString(),
+    scoring_version: SCORING_VERSION,
+    model_version: MODEL_VERSION,
+    sources: Array.from(sources),
+    caveats: buildCaveats(tokenData),
+    ttl_seconds: 300,
+  };
+}
+
+function buildFeatureSnapshot(breakdown, tokenData) {
+  if (tokenData.megacap) return { category: "megacap" };
+  return { age_bucket: ageBucket(tokenData.ageInHours), liquidity_bucket: liquidityBucket(tokenData.liquidityUsd), holder_bucket: holderBucket(breakdown.holderConcentration) };
+}
+
+module.exports = { calculateSurvivalScore, generateReasons, getConfidence, WEIGHTS, ENGINE, SCORING_VERSION, MODEL_VERSION, buildStructuredReasons, getConfidenceFloat, buildMeta, buildFeatureSnapshot, normalizeRiskTier };

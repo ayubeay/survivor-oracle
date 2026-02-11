@@ -7,7 +7,7 @@
 
 const express = require('express');
 const { fetchTokenData } = require('./fetcher');
-const { calculateSurvivalScore, generateReasons, getConfidence, WEIGHTS } = require('./scorer');
+const { calculateSurvivalScore, generateReasons, getConfidence, WEIGHTS, ENGINE, SCORING_VERSION, MODEL_VERSION, buildStructuredReasons, getConfidenceFloat, buildMeta, buildFeatureSnapshot, normalizeRiskTier } = require('./scorer');
 const { startMonitor, getRecentScores, getMonitorStats } = require('./monitor');
 const { saveScore, getScoreHistory, getRecentScoresDB, getStats, getExtremes, getScoreDistribution, getHourlyActivity } = require('./database');
 const { sanitizeText } = require('./sanitizer');
@@ -57,19 +57,45 @@ app.get('/score/:mint', async function (req, res) {
     var quick = req.query.quick === 'true';
     var cached = cache.get(mint);
     if (cached && Date.now() - cached.ts < CACHE_TTL) {
-      if (quick) return res.json({ mint: mint, score: cached.data.score, riskLevel: cached.data.riskLevel, safe: cached.data.score >= 55, cached: true });
+      if (quick) {
+        var cr = cached.data;
+        var cReasons = buildStructuredReasons(cr.breakdown, cr._tokenData || {});
+        return res.json({
+          engine: ENGINE, chain: "solana", mint: mint,
+          score: cr.score, risk_tier: normalizeRiskTier(cr.riskLevel), safe: cr.score >= 55,
+          confidence: getConfidenceFloat(cr._tokenData || {}),
+          reasons: cReasons,
+          meta: buildMeta(cr._tokenData || {}, cReasons),
+          name: cr.name, symbol: cr.symbol, riskLevel: cr.riskLevel, cached: true,
+        });
+      }
       return res.json(cached.data);
     }
     var tokenData = await fetchTokenData(mint);
     var result = calculateSurvivalScore(tokenData);
+    var structuredReasons = buildStructuredReasons(result.breakdown, tokenData);
+    var confidenceFloat = getConfidenceFloat(tokenData);
+    var riskTier = normalizeRiskTier(result.riskLevel);
+    var meta = buildMeta({ ...tokenData, timestamp: result.timestamp }, structuredReasons);
     var fullResult = {
+      engine: ENGINE, chain: "solana",
       mint: mint, name: tokenData.name, symbol: tokenData.symbol,
-      score: result.score, riskLevel: result.riskLevel, safe: result.score >= 55,
+      score: result.score, risk_tier: riskTier, safe: result.score >= 55,
+      confidence: confidenceFloat,
+      reasons: structuredReasons,
+      meta: meta,
+      riskLevel: result.riskLevel,
       breakdown: result.breakdown, weights: result.weights,
       holderNote: tokenData.holderNote, liquidityUsd: tokenData.liquidityUsd,
       ageInHours: tokenData.ageInHours, timestamp: result.timestamp,
+      _tokenData: tokenData,
     };
     if (result.mode) fullResult.mode = result.mode;
+    if (!quick) {
+      fullResult.feature_snapshot = buildFeatureSnapshot(result.breakdown, tokenData);
+      fullResult.legacyReasons = generateReasons(tokenData, result.breakdown);
+      fullResult.legacyConfidence = getConfidence(tokenData);
+    }
     saveScore({
       mint: mint, name: tokenData.name, symbol: tokenData.symbol,
       score: result.score, riskLevel: result.riskLevel, safe: result.score >= 55,
@@ -77,16 +103,9 @@ app.get('/score/:mint', async function (req, res) {
       ageInHours: tokenData.ageInHours, holderNote: tokenData.holderNote, source: 'api',
     });
     cache.set(mint, { ts: Date.now(), data: fullResult });
-    if (quick) {
-      return res.json({
-        mint: mint, score: result.score, riskLevel: result.riskLevel, safe: result.score >= 55,
-        confidence: getConfidence(tokenData), reasons: generateReasons(tokenData, result.breakdown),
-        mode: result.mode || undefined,
-      });
-    }
-    fullResult.confidence = getConfidence(tokenData);
-    fullResult.reasons = generateReasons(tokenData, result.breakdown);
-    res.json(fullResult);
+    var response = Object.assign({}, fullResult);
+    delete response._tokenData;
+    res.json(response);
   } catch (error) {
     res.status(500).json({ error: 'Failed to score token', message: error.message });
   }
