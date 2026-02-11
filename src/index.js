@@ -12,6 +12,7 @@ const { startMonitor, getRecentScores, getMonitorStats } = require('./monitor');
 const { startRescorer, getRescoreStats } = require("./rescorer");
 const { saveScore, getScoreHistory, getRecentScoresDB, getStats, getExtremes, getScoreDistribution, getHourlyActivity, getScoreHistoryPhase2 } = require('./database');
 const { fetchRugCheck } = require("./rugcheck");
+const { authMiddleware, createApiKey, listApiKeys, revokeApiKey, canUseExt, canUseDebug } = require("./auth");
 const { sanitizeText } = require('./sanitizer');
 
 const app = express();
@@ -29,6 +30,7 @@ function formatUptime(seconds) {
   return h + 'h ' + m + 'm ' + sec + 's';
 }
 
+app.use(authMiddleware);
 app.get('/', function (req, res) {
   var stats = getStats();
   var extremes = getExtremes(5);
@@ -95,7 +97,7 @@ app.get('/score/:mint', async function (req, res) {
     if (result.mode) fullResult.mode = result.mode;
     if (!quick) {
       fullResult.feature_snapshot = buildFeatureSnapshot(result.breakdown, tokenData);
-      if (req.query.debug === "true") fullResult.weights = result.weights;
+      if (req.query.debug === "true") { if (!canUseDebug(req)) { return res.status(403).json({ error: "forbidden", feature: "debug", message: "Debug weights require Pro tier." }); } fullResult.weights = result.weights; }
       fullResult.legacyReasons = generateReasons(tokenData, result.breakdown);
       fullResult.legacyConfidence = getConfidence(tokenData);
     }
@@ -110,6 +112,9 @@ app.get('/score/:mint', async function (req, res) {
     delete response._tokenData;
     // Phase 3: external signals (opt-in via ?ext=true)
     if (req.query.ext === 'true') {
+      if (!canUseExt(req)) {
+        return res.status(402).json({ error: "tier_required", feature: "ext", message: "External engine signals require a paid tier. DM @youngs_modulus on X for access." });
+      }
       var rugResult = await fetchRugCheck(mint);
       response.external_signals = { rugcheck: rugResult };
       if ((tokenData || {}).ageInHours != null && tokenData.ageInHours < 0.2) {
@@ -205,6 +210,31 @@ app.get('/feed/latest', function (req, res) {
 
 app.get('/activity', function (req, res) {
   res.json({ hourly: getHourlyActivity() });
+});
+
+// Admin endpoints — protected by ADMIN_TOKEN env var
+var ADMIN_TOKEN = process.env.ADMIN_TOKEN || "survivor_admin_change_me";
+
+app.post("/admin/keys", express.json(), function (req, res) {
+  if (req.headers["x-admin-token"] !== ADMIN_TOKEN) return res.status(401).json({ error: "unauthorized" });
+  var name = (req.body || {}).name || null;
+  var tier = (req.body || {}).tier || "early";
+  if (!["free", "early", "pro", "admin"].includes(tier)) return res.status(400).json({ error: "invalid tier" });
+  var result = createApiKey(name, tier);
+  res.json({ created: true, key: result.key, name: result.name, tier: result.tier, daily_limit: result.daily_limit });
+});
+
+app.get("/admin/keys", function (req, res) {
+  if (req.headers["x-admin-token"] !== ADMIN_TOKEN) return res.status(401).json({ error: "unauthorized" });
+  res.json({ keys: listApiKeys() });
+});
+
+app.post("/admin/keys/revoke", express.json(), function (req, res) {
+  if (req.headers["x-admin-token"] !== ADMIN_TOKEN) return res.status(401).json({ error: "unauthorized" });
+  var key = (req.body || {}).key;
+  if (!key) return res.status(400).json({ error: "key required" });
+  revokeApiKey(key);
+  res.json({ revoked: true, key: key });
 });
 
 function generateDashboard(stats, extremes, distribution, hourly, monStats, recent, rescoreStats) {
