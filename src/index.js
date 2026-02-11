@@ -10,7 +10,7 @@ const { fetchTokenData } = require('./fetcher');
 const { calculateSurvivalScore, generateReasons, getConfidence, WEIGHTS, ENGINE, SCORING_VERSION, MODEL_VERSION, buildStructuredReasons, getConfidenceFloat, buildMeta, buildFeatureSnapshot, normalizeRiskTier } = require('./scorer');
 const { startMonitor, getRecentScores, getMonitorStats } = require('./monitor');
 const { startRescorer, getRescoreStats } = require("./rescorer");
-const { saveScore, getScoreHistory, getRecentScoresDB, getStats, getExtremes, getScoreDistribution, getHourlyActivity } = require('./database');
+const { saveScore, getScoreHistory, getRecentScoresDB, getStats, getExtremes, getScoreDistribution, getHourlyActivity, getScoreHistoryPhase2 } = require('./database');
 const { sanitizeText } = require('./sanitizer');
 
 const app = express();
@@ -114,8 +114,28 @@ app.get('/score/:mint', async function (req, res) {
 
 app.get('/history/:mint', function (req, res) {
   var limit = Math.min(parseInt(req.query.limit) || 20, 100);
-  var history = getScoreHistory(req.params.mint, limit);
-  res.json({ mint: req.params.mint, count: history.length, history: history });
+  var mint = req.params.mint;
+  var phase2 = getScoreHistoryPhase2(mint, limit);
+  if (phase2.length > 0) {
+    var entries = phase2.map(function (h) {
+      return {
+        score: h.score,
+        risk_level: h.risk_level,
+        confidence: h.confidence,
+        model_version: h.model_version,
+        scoring_version: h.scoring_version,
+        reason_codes: h.reason_codes ? JSON.parse(h.reason_codes) : [],
+        score_delta: h.score_delta,
+        volatility_flag: !!h.volatility_flag,
+        bait_and_switch_flag: !!h.bait_and_switch_flag,
+        rescore_window: h.rescore_window,
+        scored_at: h.created_at,
+      };
+    });
+    return res.json({ mint: mint, count: entries.length, source: 'score_history', entries: entries });
+  }
+  var legacy = getScoreHistory(mint, limit);
+  res.json({ mint: mint, count: legacy.length, source: 'scores', history: legacy });
 });
 
 app.get('/stats', function (req, res) {
