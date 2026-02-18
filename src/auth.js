@@ -88,9 +88,7 @@ function revokeApiKey(key) {
  * Open endpoints: /, /health, /stats, /recent, /activity
  */
 function authMiddleware(req, res, next) {
-  if (req.headers['x-payment'] || req.headers['x-payment-response'] || req.path.startsWith('/.well-known/x402')) {
-    return next();
-  }
+
   // Open endpoints — no auth needed
   const openPaths = ['/', '/health', '/stats', '/recent', '/activity'];
   if (openPaths.includes(req.path)) return next();
