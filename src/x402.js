@@ -37,7 +37,9 @@ function x402SuccessLogger(req, res, next) {
   const originalJson = res.json.bind(res);
   res.json = function(data) {
     if (res.statusCode === 200 && req.path.startsWith('/score/')) {
-      console.log('[PAYMENT_SUCCESS]', new Date().toISOString(), req.method, req.originalUrl, 'payer:', req.headers['x-payment'] ? req.headers['x-payment'].slice(0,20) + '...' : 'api-key');
+      const apiKey = req.headers['x-api-key'] || req.query.api_key;
+      const hasX402 = !!(req.headers['x-payment'] || req.headers['x-payment-response'] || req.headers['x402-payment'] || req.headers['x402-payment-response']);
+      console.log('[PAYMENT_SUCCESS]', new Date().toISOString(), req.method, req.originalUrl, 'via:', apiKey ? 'api-key' : (hasX402 ? 'x402' : 'unknown'), 'ip:', req.ip);
     }
     return originalJson(data);
   };
