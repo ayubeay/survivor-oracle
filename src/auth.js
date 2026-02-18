@@ -88,6 +88,9 @@ function revokeApiKey(key) {
  * Open endpoints: /, /health, /stats, /recent, /activity
  */
 function authMiddleware(req, res, next) {
+  if (req.headers['x-payment'] || req.headers['x-payment-response'] || req.path.startsWith('/.well-known/x402')) {
+    return next();
+  }
   // Open endpoints — no auth needed
   const openPaths = ['/', '/health', '/stats', '/recent', '/activity'];
   if (openPaths.includes(req.path)) return next();
@@ -95,7 +98,15 @@ function authMiddleware(req, res, next) {
   const apiKey = req.headers['x-api-key'] || req.query.api_key;
 
   if (!apiKey) {
-    // Free tier — rate limit by IP
+    // /score/ requires x402 payment or API key — no free tier
+    if (req.path.startsWith('/score/')) {
+      return res.status(402).json({
+        error: 'payment_required',
+        message: 'This endpoint requires payment. Pay $0.01 USDC via x402 or use an API key.',
+        upgrade: 'DM @youngs_modulus on X for API access',
+      });
+    }
+    // Free tier — rate limit by IP for other endpoints
     const ip = req.ip || req.connection.remoteAddress || 'unknown';
     const freeKey = 'free_' + ip;
     const usage = getDailyUsage.get(freeKey);
