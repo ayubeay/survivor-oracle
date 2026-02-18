@@ -14,7 +14,7 @@ const { saveScore, getScoreHistory, getRecentScoresDB, getStats, getExtremes, ge
 const { fetchRugCheck } = require("./rugcheck");
 const { authMiddleware, createApiKey, listApiKeys, revokeApiKey, canUseExt, canUseDebug } = require("./auth");
 const { sanitizeText } = require('./sanitizer');
-const { x402Middleware, initX402 } = require('./x402');
+const { x402Middleware, initX402, x402SuccessLogger } = require('./x402');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -32,6 +32,7 @@ function formatUptime(seconds) {
 }
 
 app.use(x402Middleware);
+app.use(x402SuccessLogger);
 app.use(authMiddleware);
 app.get('/', function (req, res) {
   var stats = getStats();

@@ -33,4 +33,15 @@ async function initX402() {
 
 const x402Middleware = paymentMiddleware(routes, resourceServer, undefined, undefined, false);
 
-module.exports = { x402Middleware, initX402 };
+function x402SuccessLogger(req, res, next) {
+  const originalJson = res.json.bind(res);
+  res.json = function(data) {
+    if (res.statusCode === 200 && req.path.startsWith('/score/')) {
+      console.log('[PAYMENT_SUCCESS]', new Date().toISOString(), req.method, req.originalUrl, 'payer:', req.headers['x-payment'] ? req.headers['x-payment'].slice(0,20) + '...' : 'api-key');
+    }
+    return originalJson(data);
+  };
+  next();
+}
+
+module.exports = { x402Middleware, initX402, x402SuccessLogger };
