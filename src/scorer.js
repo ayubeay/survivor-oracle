@@ -221,7 +221,9 @@ function normalizeRiskTier(riskLevel) {
   switch ((riskLevel || "").toUpperCase()) {
     case "LOW": return "LOW";
     case "MEDIUM": return "MEDIUM";
-    case "HIGH": case "VERY_HIGH": case "EXTREME": return "HIGH";
+    case "HIGH": return "HIGH";
+    case "VERY_HIGH": return "VERY_HIGH";
+    case "EXTREME": return "EXTREME";
     default: return "UNKNOWN";
   }
 }
