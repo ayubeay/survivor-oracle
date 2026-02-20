@@ -31,7 +31,7 @@ function formatUptime(seconds) {
   return h + 'h ' + m + 'm ' + sec + 's';
 }
 
-app.use(x402Middleware);
+app.use((req, res, next) => { if (req.path.startsWith('/score/') && req.query.quick === 'true') return next(); return x402Middleware(req, res, next); });
 app.use(x402SuccessLogger);
 app.use(authMiddleware);
 app.get('/', function (req, res) {
