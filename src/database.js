@@ -104,26 +104,26 @@ function getStats() {
 }
 
 function getExtremes(limit = 5) {
-  const safest = db.prepare('SELECT DISTINCT mint,name,symbol,score,risk_level,created_at FROM scores ORDER BY score DESC LIMIT ?').all(limit);
-  const riskiest = db.prepare('SELECT DISTINCT mint,name,symbol,score,risk_level,created_at FROM scores ORDER BY score ASC LIMIT ?').all(limit);
+  const safest = db.prepare(
+    'SELECT DISTINCT mint,name,symbol,score,risk_level,created_at FROM scores ORDER BY score DESC LIMIT ?'
+  ).all(limit);
+
+  const riskiest = db.prepare(
+    'SELECT DISTINCT mint,name,symbol,score,risk_level,created_at FROM scores ORDER BY score ASC LIMIT ?'
+  ).all(limit);
+
   return { safest, riskiest };
 }
 
 function getScoreDistribution() {
   return db.prepare(`
     SELECT
-      CASE
-        WHEN score >= 75 THEN 'LOW'
-        WHEN score >= 55 THEN 'MEDIUM'
-        WHEN score >= 35 THEN 'HIGH'
-        WHEN score >= 20 THEN 'VERY_HIGH'
-        ELSE 'EXTREME'
-      END as bucket,
+      risk_level as bucket,
       COUNT(*) as count,
       ROUND(AVG(score), 1) as avg_score
     FROM scores
-    GROUP BY bucket
-    ORDER BY avg_score DESC
+    GROUP BY risk_level
+    ORDER BY count DESC
   `).all();
 }
 
