@@ -97,7 +97,7 @@ function authMiddleware(req, res, next) {
 
   if (!apiKey) {
     // /score/ requires x402 payment or API key — no free tier
-    if (req.path.startsWith('/score/')) {
+    if (req.path.startsWith('/score/') && req.query.quick !== 'true') {
       console.log('[PAYMENT_REQUIRED]', new Date().toISOString(), req.path, req.ip);
       return res.status(402).json({
         error: 'payment_required',
