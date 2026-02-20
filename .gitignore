@@ -5,3 +5,6 @@ node_modules/
 survivor.db
 survivor.db-shm
 survivor.db-wal
+
+# local sqlite backups
+survivor.db.bak_*
