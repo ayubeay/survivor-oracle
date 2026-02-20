@@ -106,9 +106,9 @@ function calculateSurvivalScore(tokenData) {
   var score = Math.round(totalScore);
   var riskLevel;
   if (score >= 75) riskLevel = 'LOW';
-  else if (score >= 55) riskLevel = 'MEDIUM';
-  else if (score >= 35) riskLevel = 'HIGH';
-  else if (score >= 20) riskLevel = 'VERY_HIGH';
+  else if (score >= 60) riskLevel = 'MEDIUM';
+  else if (score >= 50) riskLevel = 'HIGH';
+  else if (score >= 40) riskLevel = 'VERY_HIGH';
   else riskLevel = 'EXTREME';
 
   return { score: score, riskLevel: riskLevel, breakdown: breakdown, weights: WEIGHTS, timestamp: new Date().toISOString() };
