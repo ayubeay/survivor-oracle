@@ -69,7 +69,7 @@ app.get('/score/:mint', async function (req, res) {
         var cReasons = buildStructuredReasons(cr.breakdown, cr._tokenData || {});
         return res.json({
           engine: ENGINE, chain: "solana", mint: mint,
-          score: cr.score, risk_tier: normalizeRiskTier(cr.riskLevel), safe: cr.score >= 55,
+          score: cr.score, risk_tier: normalizeRiskTier(cr.riskLevel), safe: cr.score >= 60,
           confidence: getConfidenceFloat(cr._tokenData || {}),
           reasons: cReasons,
           meta: buildMeta(cr._tokenData || {}, cReasons),
@@ -87,7 +87,7 @@ app.get('/score/:mint', async function (req, res) {
     var fullResult = {
       engine: ENGINE, chain: "solana",
       mint: mint, name: tokenData.name, symbol: tokenData.symbol,
-      score: result.score, risk_tier: riskTier, safe: result.score >= 55,
+      score: result.score, risk_tier: riskTier, safe: result.score >= 60,
       confidence: confidenceFloat,
       reasons: structuredReasons,
       meta: meta,
@@ -106,7 +106,7 @@ app.get('/score/:mint', async function (req, res) {
     }
     saveScore({
       mint: mint, name: tokenData.name, symbol: tokenData.symbol,
-      score: result.score, riskLevel: result.riskLevel, safe: result.score >= 55,
+      score: result.score, riskLevel: result.riskLevel, safe: result.score >= 60,
       breakdown: result.breakdown, liquidityUsd: tokenData.liquidityUsd,
       ageInHours: tokenData.ageInHours, holderNote: tokenData.holderNote, source: 'api',
     });
