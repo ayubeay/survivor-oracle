@@ -17,7 +17,7 @@ const http = require('http');
 const { buildPolicy } = require('./policy');
 const { enforce } = require('./enforce');
 
-const PORT = process.env.GATE_PORT ? Number(process.env.GATE_PORT) : 8787;
+const PORT = process.env.PORT || process.env.GATE_PORT || 8787;
 const SURVIVOR_URL = (process.env.SURVIVOR_URL || 'https://survivor-oracle-production.up.railway.app').replace(/\/$/, '');
 const TIMEOUT_MS = process.env.GATE_TIMEOUT_MS ? Number(process.env.GATE_TIMEOUT_MS) : 8000;
 
