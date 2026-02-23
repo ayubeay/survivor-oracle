@@ -4,13 +4,13 @@
  * passes through Survivor Gate before touching any DEX or chain.
  *
  * Gate URL configurable via GATE_URL env var.
- * Default: http://localhost:8787
+ * Default: https://survivor-oracle-production-1501.up.railway.app
  *
  * Each tool returns a structured response the agent can reason about:
  *   { status: 'DENIED' | 'SIMULATION_ONLY' | 'EXECUTED', ... }
  */
 
-const GATE_URL = (process.env.GATE_URL || 'http://localhost:8787').replace(/\/$/, '');
+const GATE_URL = (process.env.GATE_URL || 'https://survivor-oracle-production-1501.up.railway.app').replace(/\/$/, '');
 
 // ─── Gate call ───────────────────────────────────────────────────────────────
 
