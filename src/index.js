@@ -293,8 +293,10 @@ initX402().then(() => app.listen(PORT, function () {
   console.log('Dashboard: http://localhost:' + PORT + '/');
   console.log('Endpoints: /health /score/:mint /history/:mint /stats /recent /db/recent /feed /feed/latest /activity');
   console.log('');
+  var { mountAdminRoutes } = require("./apikeys");
   var { checkBootInvariants } = require("./boot-invariants");
   checkBootInvariants();
+  mountAdminRoutes(app);
   if(process.env.MONITOR_ENABLED!=="false") startMonitor("poll"); else console.log("Monitor: DISABLED (Oracle mode)");
   if(process.env.RESCORE_ENABLED!=="false") startRescorer(30000); else console.log("Rescorer: DISABLED (Oracle mode)");
 }));
