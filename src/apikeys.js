@@ -11,6 +11,7 @@ try { require('fs').mkdirSync(DB_DIR, { recursive: true }); } catch (e) {}
 
 const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
+console.log('[apikeys] DB path: '+DB_PATH);
 
 // ── Schema ────────────────────────────────────────────────────────────────────
 
