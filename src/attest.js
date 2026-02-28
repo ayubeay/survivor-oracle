@@ -191,6 +191,7 @@ prune:adb.prepare("DELETE FROM attestation_cache WHERE expires_at<?"),
 stats:adb.prepare("SELECT COUNT(*)as total,SUM(CASE WHEN expires_at>? THEN 1 ELSE 0 END)as active FROM attestation_cache")
 };
 attestCache.prune.run(Math.floor(Date.now()/1000));
+console.log("[attest] Cache DB path: "+DB_PATH);
 console.log("[attest] Attestation cache: SQLite active");
 }catch(e){console.warn("[attest] Cache disabled: "+e.message);}}
 
