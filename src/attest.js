@@ -191,6 +191,7 @@ prune:adb.prepare("DELETE FROM attestation_cache WHERE expires_at<?"),
 stats:adb.prepare("SELECT COUNT(*)as total,SUM(CASE WHEN expires_at>? THEN 1 ELSE 0 END)as active FROM attestation_cache")
 };
 attestCache.prune.run(Math.floor(Date.now()/1000));
+try{var files=require("fs").readdirSync("/app/data");console.log("[attest] /app/data contents: "+JSON.stringify(files));}catch(e){console.log("[attest] /app/data error: "+e.message);}
 console.log("[attest] Cache DB path: "+DB_PATH);
 process.on("SIGTERM",function(){try{adb.pragma("wal_checkpoint(TRUNCATE)");adb.close();console.log("[attest] DB flushed and closed");}catch(e){}});
 console.log("[attest] Attestation cache: SQLite active");
