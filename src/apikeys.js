@@ -79,7 +79,7 @@ function checkAndConsume(req, opts) {
     return { ok: true, tier: 'free', daily_limit: freeDailyLimit, used: null, key: null };
   }
 
-  const row = stmts.getKey.get(key);
+  const row = db.prepare("SELECT key, name, tier, daily_limit, enabled FROM api_keys WHERE key = ?").get(key);
 
   // Unknown key
   if (!row) return { ok: false, status: 401, error: 'invalid_api_key' };
@@ -88,8 +88,8 @@ function checkAndConsume(req, opts) {
   if (!row.enabled) return { ok: false, status: 403, error: 'api_key_revoked' };
 
   // Ensure usage row exists
-  stmts.upsertUsage.run(key, yyyymmdd);
-  const usage = stmts.getUsage.get(key, yyyymmdd);
+  db.prepare("INSERT INTO api_usage_daily (key, yyyymmdd, count) VALUES (?, ?, 0) ON CONFLICT(key, yyyymmdd) DO NOTHING").run(key, yyyymmdd);
+  const usage = db.prepare("SELECT count FROM api_usage_daily WHERE key = ? AND yyyymmdd = ?").get(key, yyyymmdd);
   const currentCount = (usage && usage.count) || 0;
   const limit = Number(row.daily_limit || freeDailyLimit);
 
@@ -106,7 +106,7 @@ function checkAndConsume(req, opts) {
   }
 
   // Consume
-  stmts.incUsage.run(currentCount + 1, key, yyyymmdd);
+  db.prepare("UPDATE api_usage_daily SET count = ? WHERE key = ? AND yyyymmdd = ?").run(currentCount + 1, key, yyyymmdd);
 
   return {
     ok: true,
@@ -126,7 +126,7 @@ function createApiKey(opts) {
   const daily_limit = Number((opts && opts.daily_limit) || (tier === 'free' ? 50 : 50000));
   const created_at = Math.floor(Date.now() / 1000);
 
-  stmts.insertKey.run({ key, name, tier, daily_limit, created_at });
+  db.prepare("INSERT INTO api_keys (key, name, tier, daily_limit, enabled, created_at) VALUES (?,?,?,?,1,?)").run(key, name, tier, daily_limit, created_at);
   return { key, name, tier, daily_limit, enabled: true, created_at };
 }
 
@@ -135,12 +135,12 @@ function listApiKeys() {
 }
 
 function revokeApiKey(key) {
-  stmts.revokeKey.run(key);
+  db.prepare("UPDATE api_keys SET enabled = 0 WHERE key = ?").run(key);
   return true;
 }
 
 function getUsageToday() {
-  return stmts.allUsage.all(todayUTC());
+  return db.prepare("SELECT key, yyyymmdd, count FROM api_usage_daily WHERE yyyymmdd = ? ORDER BY count DESC").all(todayUTC());
 }
 
 // ── Express middleware ─────────────────────────────────────────────────────────
