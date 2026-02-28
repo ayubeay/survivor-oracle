@@ -179,6 +179,8 @@ async function handler(req, res) {
 let attestCache=null,cacheHits=0,cacheMisses=0;
 if(process.env.ATTEST_CACHE_ENABLED!=="false"){try{
 const Database=require("better-sqlite3");
+const DB_DIR=path.dirname(process.env.ATTEST_DB_PATH||path.join(__dirname,"..","attestations.db"));
+try{require("fs").mkdirSync(DB_DIR,{recursive:true});}catch(e){}
 const DB_PATH=process.env.ATTEST_DB_PATH||path.join(__dirname,"..","attestations.db");
 const adb=new Database(DB_PATH);adb.pragma("journal_mode = WAL");
 adb.exec("CREATE TABLE IF NOT EXISTS attestation_cache(mint TEXT NOT NULL,domain TEXT NOT NULL,router_program_id TEXT NOT NULL,attestation_json TEXT NOT NULL,signature TEXT NOT NULL,signer TEXT NOT NULL,score INTEGER NOT NULL,risk_level TEXT NOT NULL,expires_at INTEGER NOT NULL,created_at TEXT DEFAULT(datetime(\x27now\x27)),PRIMARY KEY(mint,domain,router_program_id));CREATE INDEX IF NOT EXISTS idx_attest_expires ON attestation_cache(expires_at);");
