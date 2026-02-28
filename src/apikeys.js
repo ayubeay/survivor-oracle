@@ -131,7 +131,7 @@ function createApiKey(opts) {
 }
 
 function listApiKeys() {
-  return stmts.listKeys.all();
+  return db.prepare("SELECT key, name, tier, daily_limit, enabled, created_at FROM api_keys ORDER BY created_at DESC").all();
 }
 
 function revokeApiKey(key) {
