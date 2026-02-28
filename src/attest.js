@@ -192,6 +192,7 @@ stats:adb.prepare("SELECT COUNT(*)as total,SUM(CASE WHEN expires_at>? THEN 1 ELS
 };
 attestCache.prune.run(Math.floor(Date.now()/1000));
 console.log("[attest] Cache DB path: "+DB_PATH);
+process.on("SIGTERM",function(){try{adb.pragma("wal_checkpoint(TRUNCATE)");adb.close();console.log("[attest] DB flushed and closed");}catch(e){}});
 console.log("[attest] Attestation cache: SQLite active");
 }catch(e){console.warn("[attest] Cache disabled: "+e.message);}}
 
