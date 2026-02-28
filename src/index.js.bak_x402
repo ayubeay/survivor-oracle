@@ -1,4 +1,3 @@
-require("dotenv").config();
 /**
  * SURVIVOR Token Risk Oracle
  * Autonomous risk intelligence for Solana pump.fun tokens
@@ -32,12 +31,9 @@ function formatUptime(seconds) {
   return h + 'h ' + m + 'm ' + sec + 's';
 }
 
-app.use((req, res, next) => { if (req.path.startsWith('/score/') && req.query.quick === 'true') return next(); return x402Middleware(req, res, next); });
+app.use(x402Middleware);
 app.use(x402SuccessLogger);
 app.use(authMiddleware);
-app.use(express.json());
-const attestRouter = require('./attest');
-app.use('/attest', attestRouter);
 app.get('/', function (req, res) {
   var stats = getStats();
   var extremes = getExtremes(5);
@@ -293,6 +289,6 @@ initX402().then(() => app.listen(PORT, function () {
   console.log('Dashboard: http://localhost:' + PORT + '/');
   console.log('Endpoints: /health /score/:mint /history/:mint /stats /recent /db/recent /feed /feed/latest /activity');
   console.log('');
-  if(process.env.MONITOR_ENABLED!=="false") startMonitor("poll"); else console.log("Monitor: DISABLED (Oracle mode)");
-  if(process.env.RESCORE_ENABLED!=="false") startRescorer(30000); else console.log("Rescorer: DISABLED (Oracle mode)");
+  startMonitor('poll');
+  startRescorer(30000);
 }));

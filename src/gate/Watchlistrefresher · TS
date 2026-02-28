@@ -1,0 +1,229 @@
+/**
+ * watchlistRefresher.ts — Fastify plugin
+ *
+ * Every `intervalMs` (default 10 min):
+ *   1. Fetches Birdeye trending tokens.
+ *   2. Diffs vs current poller watchlist.
+ *   3. Removes up to `maxChurn` non-pinned mints that fell off trending.
+ *   4. Adds up to `maxChurn` new trending mints.
+ *   5. Warms caches for newly added mints.
+ *
+ * Pinned mints (WATCHLIST_PINS env) are NEVER removed.
+ * Churn is capped so ring-buffer history is preserved across refreshes.
+ *
+ * Requires:
+ *   - swapPoller plugin registered first (fastify.swapPoller)
+ *   - fastify.adapter decorated (fastify.decorate("adapter", adapter) in server.ts)
+ *   - BIRDEYE_API_KEY in env
+ *
+ * Env vars:
+ *   WATCHLIST_PINS          CSV of mints that are never evicted
+ *   WATCHLIST_PIN_LABELS    CSV of labels aligned by index
+ *   TRENDING_SORT_BY        rank|liquidity|volume_24h_usd (default: rank)
+ *   TRENDING_SORT_TYPE      asc|desc (default: asc)
+ */
+
+import fp                                   from "fastify-plugin";
+import type { FastifyInstance }             from "fastify";
+import { loadTrendingFromBirdeye, toWatchItems } from "../watchlist/trendingLoader";
+import type { WatchItem }                   from "../watchlist/trendingLoader";
+import type { DataAdapter }                 from "../types";
+
+// ─────────────────────────────────────────────
+// TYPES
+// ─────────────────────────────────────────────
+
+export interface WatchlistRefresherOpts {
+  enabled?:         boolean;
+  intervalMs?:      number;   // default 10 min
+  maxChurn?:        number;   // max adds/removes per refresh (default 2)
+  maxWatch?:        number;   // total watchlist size cap exc. pins (default 10)
+  warmConcurrency?: number;   // parallel cache warm (default 3)
+  htf?:             string;   // default "4h"
+  ltf?:             string;   // default "5m"
+}
+
+// ─────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────
+
+function parseCSV(v?: string): string[] {
+  if (!v) return [];
+  return v.split(",").map(s => s.trim()).filter(Boolean);
+}
+
+async function mapLimit<T>(
+  items: T[],
+  limit: number,
+  fn:    (x: T) => Promise<void>,
+): Promise<void> {
+  let i = 0;
+  async function worker() {
+    while (i < items.length) {
+      const item = items[i++];
+      await fn(item).catch(() => {});
+    }
+  }
+  await Promise.all(Array.from({ length: Math.max(1, limit) }, worker));
+}
+
+// ─────────────────────────────────────────────
+// FASTIFY INSTANCE AUGMENTATION
+// ─────────────────────────────────────────────
+
+declare module "fastify" {
+  interface FastifyInstance {
+    adapter: DataAdapter;
+  }
+}
+
+// ─────────────────────────────────────────────
+// PLUGIN
+// ─────────────────────────────────────────────
+
+export default fp(async function watchlistRefresher(
+  fastify: FastifyInstance,
+  opts:    WatchlistRefresherOpts,
+) {
+  const enabled = opts.enabled ?? true;
+  if (!enabled) {
+    fastify.log.info("watchlistRefresher: disabled");
+    return;
+  }
+
+  const birdeyeKey = process.env.BIRDEYE_API_KEY;
+  if (!birdeyeKey) {
+    fastify.log.warn("watchlistRefresher: BIRDEYE_API_KEY not set — refresher disabled");
+    return;
+  }
+
+  const intervalMs      = opts.intervalMs      ?? 10 * 60_000;
+  const maxChurn        = opts.maxChurn        ?? 2;
+  const maxWatch        = opts.maxWatch        ?? 10;
+  const warmConcurrency = opts.warmConcurrency ?? 3;
+  const htf             = opts.htf             ?? "4h";
+  const ltf             = opts.ltf             ?? "5m";
+
+  // Pinned mints — resolved at plugin startup, fixed for the lifetime of the process.
+  const pinMints   = parseCSV(process.env.WATCHLIST_PINS);
+  const pinLabels  = parseCSV(process.env.WATCHLIST_PIN_LABELS);
+  const pinned: WatchItem[] = pinMints.map((mint, i) => ({
+    chain: "solana",
+    mint,
+    label: pinLabels[i],
+  }));
+  const pinnedSet = new Set(pinMints);
+
+  // ── One refresh cycle ─────────────────────
+
+  async function refreshOnce(): Promise<void> {
+    if (!("swapPoller" in fastify)) {
+      (fastify as FastifyInstance).log.warn("watchlistRefresher: swapPoller not found, skipping");
+      return;
+    }
+
+    const sortBy   = (process.env.TRENDING_SORT_BY   ?? "rank")  as "rank" | "liquidity" | "volume_24h_usd";
+    const sortType = (process.env.TRENDING_SORT_TYPE  ?? "asc")   as "asc" | "desc";
+    const limit    = Math.min(maxWatch + pinMints.length, 50);
+
+    let desired: WatchItem[];
+    try {
+      const trending = await loadTrendingFromBirdeye({
+        apiKey: birdeyeKey!,
+        limit,
+        sortBy,
+        sortType,
+      });
+      desired = toWatchItems(trending, maxWatch);
+    } catch (err) {
+      (fastify as FastifyInstance).log.warn({ err: (err as Error).message }, "watchlistRefresher: Birdeye fetch failed, keeping current list");
+      return;
+    }
+
+    const current     = fastify.swapPoller.watchlist;
+    const curMints    = new Set(current.map(w => w.mint));
+    const desiredMints = new Set(desired.map(w => w.mint));
+
+    // Target = pins ∪ desired (pins always included regardless of churn)
+    const targetMints = new Set([...pinnedSet, ...desiredMints]);
+
+    // Removals — non-pinned mints not in new trending, capped by maxChurn
+    const toRemove = current
+      .filter(w => !targetMints.has(w.mint) && !pinnedSet.has(w.mint))
+      .slice(0, maxChurn);
+
+    // Additions — trending mints not yet in poller, capped by maxChurn
+    const toAdd = desired
+      .filter(w => !curMints.has(w.mint))
+      .slice(0, maxChurn);
+
+    // Apply removals first (frees memory, preserves ring buffer for kept mints)
+    for (const w of toRemove) {
+      fastify.swapPoller.remove(w.mint);
+    }
+
+    // Apply additions
+    for (const w of toAdd) {
+      fastify.swapPoller.add(w.mint, w.label);
+    }
+
+    fastify.log.info(
+      {
+        added:    toAdd.map(w => w.label ?? w.mint.slice(0, 8)),
+        removed:  toRemove.map(w => w.label ?? w.mint.slice(0, 8)),
+        pinned:   pinMints.length,
+        total:    fastify.swapPoller.watchlist.length,
+      },
+      "watchlistRefresher: cycle complete",
+    );
+
+    // Warm caches for new mints (best-effort, non-blocking to the refresher loop)
+    if (toAdd.length > 0 && "adapter" in fastify) {
+      await mapLimit(toAdd, warmConcurrency, async (w) => {
+        await fastify.adapter.getSnapshot(
+          { chain: "solana", id: w.mint },
+          { htf: htf as "4h", ltf: ltf as "5m" },
+        );
+      });
+    }
+  }
+
+  // ── Lifecycle ─────────────────────────────
+
+  fastify.addHook("onReady", async () => {
+    if (!("swapPoller" in fastify)) {
+      (fastify as FastifyInstance).log.warn("watchlistRefresher: swapPoller not registered — refresher will not start");
+      return;
+    }
+
+    // Register pins immediately — before the first refresh
+    for (const p of pinned) {
+      fastify.swapPoller.add(p.mint, p.label);
+    }
+
+    fastify.log.info(
+      { intervalMs, maxChurn, maxWatch, pins: pinMints },
+      "watchlistRefresher: started",
+    );
+
+    // First refresh: short delay so ring buffers can accumulate a few seconds
+    const initDelay = setTimeout(() => {
+      refreshOnce().catch(err =>
+        fastify.log.error({ err: (err as Error).message }, "watchlistRefresher: initial refresh error"),
+      );
+    }, 5_000);
+
+    // Scheduled refreshes
+    const timer = setInterval(() => {
+      refreshOnce().catch(err =>
+        fastify.log.error({ err: (err as Error).message }, "watchlistRefresher: refresh error"),
+      );
+    }, intervalMs);
+
+    fastify.addHook("onClose", async () => {
+      clearTimeout(initDelay);
+      clearInterval(timer);
+      fastify.log.info("watchlistRefresher: stopped");
+    });
+  });
+}, { name: "watchlistRefresher", fastify: "5.x" });

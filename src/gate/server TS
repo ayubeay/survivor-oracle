@@ -1,0 +1,554 @@
+/**
+ * POI × Liquidity Engine — API Server
+ *
+ * Routes:
+ *   GET  /health
+ *   GET  /v1/state                — full composite evaluation (REST)
+ *   GET  /v1/state/stream         — SSE: push updates whenever metrics change
+ *   GET  /v1/poi
+ *   GET  /v1/targets
+ *   GET  /v1/events
+ *   GET  /v1/adapter
+ *   GET  /v1/poller               — poller status + stats
+ *   POST /v1/poller/watch         — add mint to watchlist   { mint, label? }
+ *   DELETE /v1/poller/watch?mint= — remove mint
+ */
+
+import path from "node:path";
+import Fastify, { FastifyRequest, FastifyReply } from "fastify";
+import cors from "@fastify/cors";
+import fastifyStatic from "@fastify/static";
+
+import type { Baselines, AssetRef, TimeframeRef, EngineEvent, MarketSnapshot } from "./types";
+import { MockAdapter }              from "./sources/mockAdapter";
+import { SolanaBirdeyeAdapter }     from "./sources/solanaAdapter";
+import { FullEvaluator }            from "./evaluator";
+import { buildPOIsFromHTF }         from "./poi";
+import { detectLiquidityTargets, detectInternalTargets } from "./targets";
+import swapPollerPlugin             from "./plugins/swapPoller";
+import { metrics, renderPrometheus }     from "./obs/metrics";
+import { bootstrapWarmStart }            from "./bootstrap";
+import watchlistRefresher               from "./plugins/watchlistRefresher";
+
+const fastify = Fastify({
+  logger: {
+    transport: {
+      target: "pino-pretty",
+      options: { colorize: true, translateTime: "SYS:standard", ignore: "pid,hostname" },
+    },
+  },
+});
+
+// ─── ADAPTER ─────────────────────────────────────────────────────────────────
+
+function buildAdapter() {
+  const birdeyeKey = process.env.BIRDEYE_API_KEY;
+  if (birdeyeKey) {
+    fastify.log.info("Using SolanaBirdeyeAdapter (real data)");
+    return new SolanaBirdeyeAdapter({
+      birdeyeApiKey:  birdeyeKey,
+      birdeyeBaseUrl: process.env.BIRDEYE_BASE_URL,
+      heliusApiKey:   process.env.HELIUS_API_KEY,
+      heliusBaseUrl:  process.env.HELIUS_BASE_URL,
+      rpcUrl:         process.env.SOLANA_RPC_URL,
+    });
+  }
+  fastify.log.info("BIRDEYE_API_KEY not set — using MockAdapter (demo mode)");
+  return new MockAdapter();
+}
+
+const adapter   = buildAdapter();
+const evaluator = new FullEvaluator(adapter);
+
+// Decorate adapter so watchlistRefresher and other plugins can warm caches.
+fastify.decorate("adapter", adapter);
+
+// ─── OBSERVABILITY HOOKS ─────────────────────────────────────────────────────
+// HTTP request counters + latency histogram — wired before routes so every
+// route (including /v1/metrics itself) gets instrumented.
+
+fastify.addHook("onRequest", async (req) => {
+  (req as any)._t0 = Date.now();
+});
+
+fastify.addHook("onResponse", async (req, reply) => {
+  const t0     = (req as any)._t0 as number | undefined;
+  const ms     = t0 ? Date.now() - t0 : 0;
+  const route  = (req.routeOptions?.url ?? req.url.split("?")[0]) as string;
+  const method = req.method;
+  const status = String(reply.statusCode);
+  metrics.http_requests_total.inc(1, { route, method, status });
+  metrics.http_request_duration_ms.observe(ms, { route, method, status });
+});
+
+// ─── CANDLE TTL CACHE ─────────────────────────────────────────────────────────
+// HTF: stale after 60s (4h candle moves slowly)
+// LTF: stale after 10s (5m candle matters for confirmation)
+// SSE loop reads from cache → Birdeye is NOT called every 2s
+
+interface CandleCache {
+  candles_htf:   MarketSnapshot["candles_htf"];
+  candles_ltf:   MarketSnapshot["candles_ltf"];
+  current_price: number;
+  fetchedAt:     number;
+}
+
+const candleStore = new Map<string, CandleCache>();
+const LTF_TTL_MS  = 10_000;
+
+function cKey(asset: AssetRef, tf: TimeframeRef) {
+  return `${asset.chain}:${asset.id}:${tf.htf}:${tf.ltf}`;
+}
+
+async function getCachedSnapshot(asset: AssetRef, tf: TimeframeRef): Promise<MarketSnapshot> {
+  const key   = cKey(asset, tf);
+  const now   = Date.now();
+  const entry = candleStore.get(key);
+
+  if (entry && (now - entry.fetchedAt) < LTF_TTL_MS) {
+    metrics.adapter_cache_hits_total.inc(1, { kind: "candles" });
+    return {
+      ts:            new Date().toISOString(),
+      current_price: entry.current_price,
+      candles_htf:   entry.candles_htf,
+      candles_ltf:   entry.candles_ltf,
+    };
+  }
+
+  metrics.adapter_cache_misses_total.inc(1, { kind: "candles" });
+  const snap = await adapter.getSnapshot(asset, tf);
+  candleStore.set(key, {
+    candles_htf:   snap.candles_htf,
+    candles_ltf:   snap.candles_ltf,
+    current_price: snap.current_price ?? 0,
+    fetchedAt:     now,
+  });
+  return snap;
+}
+
+// ─── POLLER INJECTION ──────────────────────────────────────────────────────────
+// Pull rolling swap metrics from ring buffer into snapshot before evaluation.
+
+function injectPollerMetrics(snap: MarketSnapshot, mint: string): void {
+  if (!("swapPoller" in fastify)) return;
+  const rolling   = fastify.swapPoller.getRolling(mint);
+  const baselines = fastify.swapPoller.getBaselines(mint, 60);
+  if (rolling) {
+    snap.swap_count_1m     = rolling.swap_count_1m;
+    snap.unique_wallets_1m = rolling.unique_wallets_1m;
+    (snap as unknown as Record<string, unknown>).swap_metrics = {
+      m1:  { swap_count: rolling.swap_count_1m,  unique_wallets: rolling.unique_wallets_1m,  sources: rolling.sources_1m  },
+      m5:  { swap_count: rolling.swap_count_5m,  unique_wallets: rolling.unique_wallets_5m,  sources: rolling.sources_5m  },
+      m15: { swap_count: rolling.swap_count_15m, unique_wallets: rolling.unique_wallets_15m, sources: rolling.sources_15m },
+    };
+  }
+  if (baselines) {
+    (snap as unknown as Record<string, unknown>).computed_baselines = baselines;
+  }
+}
+
+function buildBaselines(snap: MarketSnapshot): Baselines {
+  const cb = (snap as unknown as Record<string, unknown>).computed_baselines as Partial<Baselines> | undefined;
+  return {
+    window_minutes:       60,
+    tx_count_avg:         1_500,
+    priority_fee_p90_avg: 0.00005,
+    volume_avg:           1_000,
+    oi_delta_abs_avg:     2.0,
+    liq_total_avg:        50,
+    swap_count_avg:       cb?.swap_count_avg      ?? 40,
+    unique_wallets_avg:   cb?.unique_wallets_avg   ?? 25,
+  };
+}
+
+// ─── EVENT BUFFER ─────────────────────────────────────────────────────────────
+
+const EVENT_BUFFER: EngineEvent[] = [];
+function pushEvents(events: EngineEvent[]) {
+  for (const e of events) {
+    EVENT_BUFFER.push(e);
+    if (EVENT_BUFFER.length > 500) EVENT_BUFFER.shift();
+  }
+}
+function apiEv(type: string, detail: string): EngineEvent {
+  return { ts: new Date().toISOString(), type, detail, codes: [`API_${type}`] };
+}
+
+// ─── QUERY HELPERS ────────────────────────────────────────────────────────────
+
+function parseAsset(q: Record<string, string>): AssetRef {
+  return { chain: (q.chain ?? "solana") as AssetRef["chain"], id: q.asset ?? "DEMO", symbol: q.symbol };
+}
+function parseTF(q: Record<string, string>): TimeframeRef {
+  return { htf: (q.htf ?? "4h") as TimeframeRef["htf"], ltf: (q.ltf ?? "5m") as TimeframeRef["ltf"] };
+}
+function rid() { return `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`; }
+
+// ─── PLUGINS ──────────────────────────────────────────────────────────────────
+
+// All registration + listen in a single async start() so plugins are
+// registered BEFORE listen() boots the server (Fastify 5 requirement).
+async function start() {
+  await fastify.register(cors, { origin: true });
+  await fastify.register(fastifyStatic, {
+    root: path.join(process.cwd(), "public"),
+    prefix: "/",
+    decorateReply: false,
+  });
+
+  if (process.env.HELIUS_API_KEY) {
+    await fastify.register(swapPollerPlugin, {
+      heliusApiKey:  process.env.HELIUS_API_KEY,
+      heliusBaseUrl: process.env.HELIUS_BASE_URL,
+      intervalMs:    2_000,
+      maxConcurrent: 2,
+      watchlist: process.env.WATCH_MINTS
+        ? process.env.WATCH_MINTS.split(",").map(m => ({ chain: "solana" as const, mint: m.trim() }))
+        : [],
+    });
+  }
+  // Watchlist auto-refresher — requires swapPoller + BIRDEYE_API_KEY
+  await fastify.register(watchlistRefresher, {
+    enabled:         process.env.REFRESH_WATCHLIST !== "0",
+    intervalMs:      Number(process.env.REFRESH_INTERVAL_MS  ?? 10 * 60_000),
+    maxChurn:        Number(process.env.REFRESH_MAX_CHURN     ?? 2),
+    maxWatch:        Number(process.env.REFRESH_MAX_WATCH     ?? 10),
+    warmConcurrency: Number(process.env.WARM_CONCURRENCY      ?? 3),
+  });
+}  // end start()
+
+// ─── BOOT HOOKS ───────────────────────────────────────────────────────────────
+// Run bootstrap (watchlist resolve + cache warm) once the server is fully ready.
+// Using onReady ensures the swapPoller plugin's own onReady has already fired
+// so we can call fastify.swapPoller.add() safely.
+
+fastify.addHook("onReady", async () => {
+  try {
+    await bootstrapWarmStart(fastify, adapter);
+  } catch (err) {
+    fastify.log.warn({ err: (err as Error).message }, "bootstrap failed — server still starts");
+  }
+});
+
+// ─── ROUTES ───────────────────────────────────────────────────────────────────
+
+fastify.get("/health", async () => ({
+  ok:      true,
+  server:  "poi-liquidity-engine",
+  adapter: await adapter.healthcheck(),
+  poller:  "swapPoller" in fastify
+    ? { running: true,  stats: fastify.swapPoller.stats, watchlist: fastify.swapPoller.watchlist }
+    : { running: false, reason: "HELIUS_API_KEY not set" },
+  ts: new Date().toISOString(),
+}));
+
+// GET /v1/state
+fastify.get("/v1/state", async (req: FastifyRequest, reply: FastifyReply) => {
+  const q   = req.query as Record<string, string>;
+  const a   = parseAsset(q);
+  const tf  = parseTF(q);
+  const id  = rid();
+  try {
+    const snap   = await getCachedSnapshot(a, tf);
+    injectPollerMetrics(snap, a.id);
+    const result = await evaluator.evaluate(a, tf, buildBaselines(snap));
+    pushEvents([...result.events, apiEv("STATE_QUERY", `${a.id} → ${result.composite.state}`)]);
+    return reply.send({ request_id: id, engine: "poi.liquidity.v1", ts: result.ts, asset: a, timeframe: tf,
+      bias: result.bias, active_poi: result.active_poi, all_pois: result.all_pois,
+      composite: result.composite, targets: result.targets, events: result.events });
+  } catch (err) {
+    fastify.log.error(err);
+    return reply.status(500).send({ request_id: id, error: "evaluation_failed", detail: (err as Error).message });
+  }
+});
+
+// GET /v1/state/stream (SSE)
+fastify.get("/v1/state/stream", async (req: FastifyRequest, reply: FastifyReply) => {
+  const q   = req.query as Record<string, string>;
+  const a   = parseAsset(q);
+  const tf  = parseTF(q);
+
+  reply.raw.writeHead(200, {
+    "Content-Type":      "text/event-stream; charset=utf-8",
+    "Cache-Control":     "no-cache, no-transform",
+    "Connection":        "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+
+  metrics.sse_clients_active.inc(1);
+
+  const send = (event: string, data: unknown) => {
+    const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+    metrics.sse_messages_total.inc(1, { event });
+    metrics.sse_bytes_total.inc(Buffer.byteLength(payload), { event });
+    reply.raw.write(payload);
+  };
+
+  const ping  = setInterval(() => reply.raw.write(`event: ping\ndata: ${Date.now()}\n\n`), 15_000);
+
+  // Delta tracking: only push when score or swap_count changes
+  let lastScore = NaN;
+  let lastSwap  = NaN;
+
+  async function tick() {
+    try {
+      const snap   = await getCachedSnapshot(a, tf);
+      injectPollerMetrics(snap, a.id);
+      const result = await evaluator.evaluate(a, tf, buildBaselines(snap));
+      const score  = result.composite.score;
+      const swaps  = snap.swap_count_1m ?? 0;
+      if (score !== lastScore || swaps !== lastSwap) {
+        lastScore = score;
+        lastSwap  = swaps;
+        send("state", {
+          ts: new Date().toISOString(), asset: a, timeframe: tf,
+          bias: result.bias, active_poi: result.active_poi,
+          composite: result.composite, targets: result.targets,
+          events: result.events.slice(-5),
+          meta: {
+            swap_count_1m:     snap.swap_count_1m,
+            unique_wallets_1m: snap.unique_wallets_1m,
+            swap_metrics:      (snap as unknown as Record<string, unknown>).swap_metrics,
+          },
+        });
+      }
+    } catch (err) {
+      send("error", { ts: new Date().toISOString(), error: (err as Error).message });
+    }
+  }
+
+  await tick();
+  const timer = setInterval(tick, 2_000);
+  req.raw.on("close", () => {
+    clearInterval(timer);
+    clearInterval(ping);
+    metrics.sse_clients_active.dec(1);
+  });
+  return reply;
+});
+
+// GET /v1/poi
+fastify.get("/v1/poi", async (req: FastifyRequest, reply: FastifyReply) => {
+  const q = req.query as Record<string, string>;
+  const a = parseAsset(q); const tf = parseTF(q);
+  const id = rid();
+  try {
+    const snap = await getCachedSnapshot(a, tf);
+    const pois = buildPOIsFromHTF(snap.candles_htf ?? [], Math.min(10, Number(q.limit ?? 3)));
+    return reply.send({ request_id: id, engine: "poi.liquidity.v1", ts: snap.ts, asset: a,
+      htf: tf.htf, current_price: snap.current_price ?? 0, pois });
+  } catch (err) {
+    return reply.status(500).send({ request_id: id, error: "poi_failed", detail: (err as Error).message });
+  }
+});
+
+// GET /v1/targets
+fastify.get("/v1/targets", async (req: FastifyRequest, reply: FastifyReply) => {
+  const q    = req.query as Record<string, string>;
+  const a    = parseAsset(q); const tf = parseTF(q);
+  const bias = (q.bias ?? "bear") as "bull" | "bear";
+  const id   = rid();
+  try {
+    const snap     = await getCachedSnapshot(a, tf);
+    const price    = snap.current_price ?? 0;
+    const external = detectLiquidityTargets(snap.candles_htf ?? [], price, bias, 5);
+    const internal = detectInternalTargets(snap.candles_htf ?? [], price, bias, 3);
+    return reply.send({ request_id: id, engine: "poi.liquidity.v1", ts: snap.ts, asset: a,
+      htf: tf.htf, bias, current_price: price, targets: { external, internal } });
+  } catch (err) {
+    return reply.status(500).send({ request_id: id, error: "targets_failed", detail: (err as Error).message });
+  }
+});
+
+// GET /v1/events
+fastify.get("/v1/events", async (req: FastifyRequest) => {
+  const q    = req.query as Record<string, string>;
+  const limit = Math.min(500, Number(q.limit ?? 100));
+  const since = q.since ? new Date(q.since).getTime() : 0;
+  let ev = EVENT_BUFFER.filter(e => new Date(e.ts).getTime() >= since);
+  if (q.type) ev = ev.filter(e => e.type === q.type);
+  return { engine: "poi.liquidity.v1", ts: new Date().toISOString(),
+    count: ev.slice(-limit).length, total: EVENT_BUFFER.length, events: ev.slice(-limit) };
+});
+
+// GET /v1/adapter
+fastify.get("/v1/adapter", async () => ({
+  engine: "poi.liquidity.v1", ts: new Date().toISOString(), adapter: await adapter.healthcheck(),
+}));
+
+// ─── WATCHLIST API ───────────────────────────────────────────────────────────
+// PIN_MINTS are resolved from env at module load time (fixed for process lifetime).
+
+const _PIN_CSV    = (process.env.WATCHLIST_PINS       ?? "").split(",").map(s => s.trim()).filter(Boolean);
+const _PIN_LABELS = (process.env.WATCHLIST_PIN_LABELS ?? "").split(",").map(s => s.trim());
+const PIN_ITEMS   = _PIN_CSV.map((mint, i) => ({ chain: "solana" as const, mint, label: _PIN_LABELS[i] || undefined }));
+const PIN_SET     = new Set(_PIN_CSV);
+
+function isValidMint(s: string): boolean { return typeof s === "string" && s.length >= 32; }
+
+// GET /v1/watchlist
+fastify.get("/v1/watchlist", async (_req, reply) => {
+  const wl = "swapPoller" in fastify ? fastify.swapPoller.watchlist : [];
+  return reply.send({
+    ok:       true,
+    ts:       new Date().toISOString(),
+    pins:     PIN_ITEMS,
+    watchlist: wl,
+    refresh:  {
+      enabled:     process.env.REFRESH_WATCHLIST !== "0",
+      interval_ms: Number(process.env.REFRESH_INTERVAL_MS ?? 10 * 60_000),
+      max_churn:   Number(process.env.REFRESH_MAX_CHURN    ?? 2),
+      max_watch:   Number(process.env.REFRESH_MAX_WATCH    ?? 10),
+      sort_by:     process.env.TRENDING_SORT_BY   ?? "rank",
+      sort_type:   process.env.TRENDING_SORT_TYPE ?? "asc",
+    },
+  });
+});
+
+// POST /v1/watchlist  { mode: "merge"|"replace", items: [{mint,label?}], warm?: bool }
+fastify.post("/v1/watchlist", async (req: FastifyRequest, reply: FastifyReply) => {
+  if (!("swapPoller" in fastify))
+    return reply.status(503).send({ ok: false, error: "poller not running" });
+
+  const body       = (req.body ?? {}) as Record<string, unknown>;
+  const mode       = (body.mode === "replace") ? "replace" : "merge";
+  const warm       = body.warm === true;
+  const rawItems   = Array.isArray(body.items) ? body.items as Record<string, unknown>[] : [];
+
+  const incoming = rawItems
+    .map(x => ({ chain: "solana" as const, mint: String(x.mint ?? ""), label: x.label ? String(x.label) : undefined }))
+    .filter(x => isValidMint(x.mint));
+
+  const current    = fastify.swapPoller.watchlist;
+  const curSet     = new Set(current.map(w => w.mint));
+
+  // Always ensure pins exist
+  for (const p of PIN_ITEMS) fastify.swapPoller.add(p.mint, p.label);
+
+  // Build target mint set
+  const target = new Set<string>([...PIN_SET]);
+  if (mode === "replace") {
+    for (const w of incoming) target.add(w.mint);
+  } else {
+    for (const w of current)  target.add(w.mint);
+    for (const w of incoming) target.add(w.mint);
+  }
+
+  // Removals (replace only, pins protected)
+  const removed: string[] = [];
+  if (mode === "replace") {
+    for (const w of current) {
+      if (!target.has(w.mint) && !PIN_SET.has(w.mint)) {
+        fastify.swapPoller.remove(w.mint);
+        removed.push(w.mint);
+      }
+    }
+  }
+
+  // Additions
+  const labelMap = new Map<string, string>();
+  for (const p of PIN_ITEMS) if (p.label) labelMap.set(p.mint, p.label);
+  for (const w of incoming)  if (w.label) labelMap.set(w.mint, w.label);
+
+  const added: string[] = [];
+  for (const mint of target) {
+    if (!curSet.has(mint)) {
+      fastify.swapPoller.add(mint, labelMap.get(mint));
+      added.push(mint);
+    }
+  }
+
+  // Optional cache warm for newly added mints
+  if (warm && added.length > 0 && "adapter" in fastify) {
+    await Promise.allSettled(
+      added.slice(0, 25).map(mint =>
+        fastify.adapter.getSnapshot({ chain: "solana", id: mint }, { htf: "4h", ltf: "5m" }),
+      ),
+    );
+  }
+
+  return reply.send({
+    ok:       true,
+    ts:       new Date().toISOString(),
+    mode,
+    added,
+    removed,
+    watchlist: fastify.swapPoller.watchlist,
+  });
+});
+
+// GET /v1/bootstrap — warm-start status
+fastify.get("/v1/bootstrap", async (_req, reply) => {
+  if (!("bootstrapState" in fastify)) {
+    return reply.send({ ok: false, reason: "bootstrap has not run yet" });
+  }
+  return reply.send({
+    ok:        fastify.bootstrapState.ok ?? false,
+    ts:        new Date().toISOString(),
+    bootstrap: fastify.bootstrapState,
+  });
+});
+
+// GET /v1/poller
+fastify.get("/v1/poller", async () => {
+  if (!("swapPoller" in fastify)) return { running: false, reason: "HELIUS_API_KEY not set" };
+  const p = fastify.swapPoller;
+  return { running: true, watchlist: p.watchlist, stats: p.stats, lastRunAt: p.lastRunAt, lastError: p.lastError };
+});
+
+// POST /v1/poller/watch
+fastify.post("/v1/poller/watch", { config: { rawBody: true } }, async (req: FastifyRequest, reply: FastifyReply) => {
+  if (!("swapPoller" in fastify)) return reply.status(503).send({ error: "poller not running" });
+  const body = req.body as Record<string, string> | null;
+  const mint = body?.mint ?? "";
+  if (!mint) return reply.status(400).send({ error: "mint required" });
+  fastify.swapPoller.add(mint, body?.label);
+  return { ok: true, watchlist: fastify.swapPoller.watchlist };
+});
+
+// GET /v1/metrics — Prometheus text format
+fastify.get("/v1/metrics", async (_req, reply) => {
+  reply.header("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
+  return reply.send(renderPrometheus());
+});
+
+// GET /v1/poller/status — backoff state per mint + global
+fastify.get("/v1/poller/status", async (_req, reply) => {
+  if (!("swapPoller" in fastify)) {
+    return reply.send({ running: false, reason: "HELIUS_API_KEY not set" });
+  }
+  const p = fastify.swapPoller;
+  return reply.send({
+    ok:            true,
+    ts:            new Date().toISOString(),
+    stats:         p.stats,
+    lastRunAt:     p.lastRunAt,
+    lastError:     p.lastError ?? null,
+    watchlist:     p.watchlist,
+    globalBackoff: p.globalBackoffInfo(),
+    mintBackoffs:  p.mintBackoffs(),
+  });
+});
+
+// DELETE /v1/poller/watch?mint=<MINT>
+fastify.delete("/v1/poller/watch", async (req: FastifyRequest, reply: FastifyReply) => {
+  if (!("swapPoller" in fastify)) return reply.status(503).send({ error: "poller not running" });
+  const mint = (req.query as Record<string, string>).mint ?? "";
+  if (!mint) return reply.status(400).send({ error: "mint required" });
+  fastify.swapPoller.remove(mint);
+  return { ok: true, watchlist: fastify.swapPoller.watchlist };
+});
+
+// ─── BOOT ─────────────────────────────────────────────────────────────────────
+// Register plugins first (required before listen in Fastify 5),
+// then start listening. Routes are registered at module level above.
+
+start().then(async () => {
+  const PORT = Number(process.env.PORT ?? 3000);
+  const HOST = process.env.HOST ?? "0.0.0.0";
+  const address = await fastify.listen({ port: PORT, host: HOST });
+  fastify.log.info(`POI Engine at ${address}`);
+  fastify.log.info(`  REST  ${address}/v1/state?chain=solana&asset=DEMO`);
+  fastify.log.info(`  SSE   ${address}/v1/state/stream?chain=solana&asset=DEMO`);
+  fastify.log.info(`  UI    ${address}/`);
+}).catch(err => { console.error("Fatal:", err); process.exit(1); });
