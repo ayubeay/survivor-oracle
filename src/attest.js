@@ -213,7 +213,7 @@ function rateLimitCheck(mint) {
 
 // ── Route ─────────────────────────────────────────────────────────────────────
 
-router.post('/', async (req, res) => {
+router.post('/', apiKeyGate, async (req, res) => {
   const mint = req.body?.mint;
 
   // Rate limit per mint
