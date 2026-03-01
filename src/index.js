@@ -34,7 +34,11 @@ function formatUptime(seconds) {
 
 app.use((req, res, next) => { if (req.path.startsWith('/score/') && req.query.quick === 'true') return next(); return x402Middleware(req, res, next); });
 app.use(x402SuccessLogger);
-app.use(authMiddleware);
+app.use(function(req, res, next) {
+  if (req.path.startsWith("/attest")) return next();
+  if (req.path.startsWith("/admin")) return next();
+  return authMiddleware(req, res, next);
+});
 app.use(express.json());
 const attestRouter = require('./attest');
 app.use('/attest', attestRouter);
