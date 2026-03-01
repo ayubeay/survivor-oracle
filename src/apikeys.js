@@ -11,7 +11,6 @@ try { require('fs').mkdirSync(DB_DIR, { recursive: true }); } catch (e) {}
 
 const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
-console.log('[apikeys] DB path: '+DB_PATH);
 
 // ── Schema ────────────────────────────────────────────────────────────────────
 
@@ -79,7 +78,7 @@ function checkAndConsume(req, opts) {
     return { ok: true, tier: 'free', daily_limit: freeDailyLimit, used: null, key: null };
   }
 
-  const row = db.prepare("SELECT key, name, tier, daily_limit, enabled FROM api_keys WHERE key = ?").get(key);
+  const row = stmts.getKey.get(key);
 
   // Unknown key
   if (!row) return { ok: false, status: 401, error: 'invalid_api_key' };
@@ -88,8 +87,8 @@ function checkAndConsume(req, opts) {
   if (!row.enabled) return { ok: false, status: 403, error: 'api_key_revoked' };
 
   // Ensure usage row exists
-  db.prepare("INSERT INTO api_usage_daily (key, yyyymmdd, count) VALUES (?, ?, 0) ON CONFLICT(key, yyyymmdd) DO NOTHING").run(key, yyyymmdd);
-  const usage = db.prepare("SELECT count FROM api_usage_daily WHERE key = ? AND yyyymmdd = ?").get(key, yyyymmdd);
+  stmts.upsertUsage.run(key, yyyymmdd);
+  const usage = stmts.getUsage.get(key, yyyymmdd);
   const currentCount = (usage && usage.count) || 0;
   const limit = Number(row.daily_limit || freeDailyLimit);
 
@@ -106,7 +105,7 @@ function checkAndConsume(req, opts) {
   }
 
   // Consume
-  db.prepare("UPDATE api_usage_daily SET count = ? WHERE key = ? AND yyyymmdd = ?").run(currentCount + 1, key, yyyymmdd);
+  stmts.incUsage.run(currentCount + 1, key, yyyymmdd);
 
   return {
     ok: true,
@@ -126,21 +125,21 @@ function createApiKey(opts) {
   const daily_limit = Number((opts && opts.daily_limit) || (tier === 'free' ? 50 : 50000));
   const created_at = Math.floor(Date.now() / 1000);
 
-  db.prepare("INSERT INTO api_keys (key, name, tier, daily_limit, enabled, created_at) VALUES (?,?,?,?,1,?)").run(key, name, tier, daily_limit, created_at);
+  stmts.insertKey.run({ key, name, tier, daily_limit, created_at });
   return { key, name, tier, daily_limit, enabled: true, created_at };
 }
 
 function listApiKeys() {
-  return db.prepare("SELECT key, name, tier, daily_limit, enabled, created_at FROM api_keys ORDER BY created_at DESC").all();
+  return stmts.listKeys.all();
 }
 
 function revokeApiKey(key) {
-  db.prepare("UPDATE api_keys SET enabled = 0 WHERE key = ?").run(key);
+  stmts.revokeKey.run(key);
   return true;
 }
 
 function getUsageToday() {
-  return db.prepare("SELECT key, yyyymmdd, count FROM api_usage_daily WHERE yyyymmdd = ? ORDER BY count DESC").all(todayUTC());
+  return stmts.allUsage.all(todayUTC());
 }
 
 // ── Express middleware ─────────────────────────────────────────────────────────
@@ -196,9 +195,7 @@ function mountAdminRoutes(app) {
   // List all keys
   app.get('/admin/keys', function (req, res) {
     if (!checkAdmin(req, res)) return;
-    var tables=db.prepare("SELECT name FROM sqlite_master WHERE type=\"table\"").all();
-    var count=db.prepare("SELECT count(*) as c FROM api_keys").get();
-    res.json({ keys: listApiKeys(), _debug: { tables, count, db_path: DB_PATH } });
+    res.json({ keys: listApiKeys() });
   });
 
   // Revoke a key
