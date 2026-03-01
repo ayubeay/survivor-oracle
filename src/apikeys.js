@@ -181,6 +181,30 @@ function mountAdminRoutes(app) {
     res.json({ revoked: true });
   });
 
+  // Public docs
+  app.get("/docs", function (req, res) {
+    res.json({
+      name: "SURVIVOR Shield Router Oracle",
+      version: "v1",
+      base_url: "https://survivor-oracle-production.up.railway.app",
+      endpoints: {
+        "POST /attest": { auth: "x-api-key (paid) or none (free 50/day)", body: { mint: "string", router_program_id: "string" }, returns: "signed attestation + meta" },
+        "POST /attest/verify": { auth: "none", body: "attestation response from /attest", returns: "7-check verification result" },
+        "GET /attest/signer": { auth: "none", returns: "oracle pubkey + program binding" },
+        "GET /attest/cache/stats": { auth: "none", returns: "cache hit/miss metrics" },
+        "GET /whoami": { auth: "x-api-key", returns: "tier + usage + remaining quota" }
+      },
+      errors: {
+        invalid_api_key: "401 - key not found",
+        api_key_revoked: "403 - key disabled",
+        rate_limited: "429 - daily limit exceeded",
+        PROGRAM_MISMATCH: "400 - router_program_id does not match configured program"
+      },
+      quick_start: "curl -sX POST $BASE/attest -H \"Content-Type: application/json\" -d '{\"mint\":\"TOKEN_MINT\",\"router_program_id\":\"Dw5bpnjUeY6XX9oCwqbDUTsAH3vAoSSszr98bfSpMcv\"}\" | jq .",
+      built_by: "@youngs_modulus"
+    });
+  });
+
   // Whoami - customer self-service
   app.get("/whoami", function (req, res) {
     var key = (req.headers["x-api-key"] || "").trim();
@@ -192,7 +216,7 @@ function mountAdminRoutes(app) {
     var yyyymmdd = d.getUTCFullYear().toString() + String(d.getUTCMonth()+1).padStart(2,"0") + String(d.getUTCDate()).padStart(2,"0");
     var usage = db.prepare("SELECT count FROM api_usage_daily WHERE key = ? AND yyyymmdd = ?").get(key, yyyymmdd);
     var used = (usage && usage.count) || 0;
-    res.json({ tier: row.tier, daily_limit: row.daily_limit, used_today: used, remaining_today: row.daily_limit - used, day: yyyymmdd });
+    res.json({ tier: row.tier, daily_limit: row.daily_limit, used_today: used, remaining_today: row.daily_limit - used, day: yyyymmdd.slice(0,4)+"-"+yyyymmdd.slice(4,6)+"-"+yyyymmdd.slice(6,8), status: "ok" });
   });
 
   // Admin stats
