@@ -181,6 +181,31 @@ function mountAdminRoutes(app) {
     res.json({ revoked: true });
   });
 
+  // Whoami - customer self-service
+  app.get("/whoami", function (req, res) {
+    var key = (req.headers["x-api-key"] || "").trim();
+    if (!key) return res.status(401).json({ error: "provide x-api-key header" });
+    var row = db.prepare("SELECT key, name, tier, daily_limit, enabled FROM api_keys WHERE key = ?").get(key);
+    if (!row) return res.status(401).json({ error: "invalid_api_key" });
+    if (!row.enabled) return res.status(403).json({ error: "api_key_revoked" });
+    var d = new Date();
+    var yyyymmdd = d.getUTCFullYear().toString() + String(d.getUTCMonth()+1).padStart(2,"0") + String(d.getUTCDate()).padStart(2,"0");
+    var usage = db.prepare("SELECT count FROM api_usage_daily WHERE key = ? AND yyyymmdd = ?").get(key, yyyymmdd);
+    var used = (usage && usage.count) || 0;
+    res.json({ tier: row.tier, daily_limit: row.daily_limit, used_today: used, remaining_today: row.daily_limit - used, day: yyyymmdd });
+  });
+
+  // Admin stats
+  app.get("/admin/keys/stats", function (req, res) {
+    if (!checkAdmin(req, res)) return;
+    try {
+      var tables = db.prepare("SELECT name FROM sqlite_master WHERE type=\"table\"").all().map(function(r){ return r.name; });
+      var total = db.prepare("SELECT count(*) as c FROM api_keys").get().c;
+      var enabled = db.prepare("SELECT count(*) as c FROM api_keys WHERE enabled=1").get().c;
+      res.json({ db_path: DB_PATH, tables: tables, keys: { total: total, enabled: enabled } });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+  });
+
   // Usage stats
   app.get('/admin/keys/usage', function (req, res) {
     if (!checkAdmin(req, res)) return;
