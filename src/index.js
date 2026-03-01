@@ -222,27 +222,7 @@ app.get('/activity', function (req, res) {
 // Admin endpoints — protected by ADMIN_TOKEN env var
 var ADMIN_TOKEN = process.env.ADMIN_TOKEN || "survivor_admin_change_me";
 
-app.post("/admin/keys", express.json(), function (req, res) {
-  if (req.headers["x-admin-token"] !== ADMIN_TOKEN) return res.status(401).json({ error: "unauthorized" });
-  var name = (req.body || {}).name || null;
-  var tier = (req.body || {}).tier || "early";
-  if (!["free", "early", "pro", "admin"].includes(tier)) return res.status(400).json({ error: "invalid tier" });
-  var result = createApiKey(name, tier);
-  res.json({ created: true, key: result.key, name: result.name, tier: result.tier, daily_limit: result.daily_limit });
-});
-
-app.get("/admin/keys", function (req, res) {
-  if (req.headers["x-admin-token"] !== ADMIN_TOKEN) return res.status(401).json({ error: "unauthorized" });
-  res.json({ keys: listApiKeys() });
-});
-
-app.post("/admin/keys/revoke", express.json(), function (req, res) {
-  if (req.headers["x-admin-token"] !== ADMIN_TOKEN) return res.status(401).json({ error: "unauthorized" });
-  var key = (req.body || {}).key;
-  if (!key) return res.status(400).json({ error: "key required" });
-  revokeApiKey(key);
-  res.json({ revoked: true, key: key });
-});
+// Admin key routes moved to apikeys.js mountAdminRoutes()
 
 function generateDashboard(stats, extremes, distribution, hourly, monStats, recent, rescoreStats) {
   var riskColors = { LOW: '#22c55e', MEDIUM: '#eab308', HIGH: '#f97316', VERY_HIGH: '#ef4444', EXTREME: '#dc2626' };
