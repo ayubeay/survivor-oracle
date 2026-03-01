@@ -36,6 +36,7 @@ app.use((req, res, next) => { if (req.path.startsWith('/score/') && req.query.qu
 app.use(x402SuccessLogger);
 app.use(function(req, res, next) {
   if (req.path.startsWith("/attest")) return next();
+  if (req.path.startsWith("/whoami")) return next();
   if (req.path.startsWith("/admin")) return next();
   return authMiddleware(req, res, next);
 });
