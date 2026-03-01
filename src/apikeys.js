@@ -196,7 +196,9 @@ function mountAdminRoutes(app) {
   // List all keys
   app.get('/admin/keys', function (req, res) {
     if (!checkAdmin(req, res)) return;
-    res.json({ keys: listApiKeys() });
+    var tables=db.prepare("SELECT name FROM sqlite_master WHERE type=\"table\"").all();
+    var count=db.prepare("SELECT count(*) as c FROM api_keys").get();
+    res.json({ keys: listApiKeys(), _debug: { tables, count, db_path: DB_PATH } });
   });
 
   // Revoke a key
