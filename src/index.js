@@ -41,9 +41,13 @@ app.use(function(req, res, next) {
   if (req.path.startsWith("/docs")) return next();
   if (req.path.startsWith("/pricing")) return next();
   if (req.path.startsWith("/credits")) return next();
+  if (req.path.startsWith("/billing")) return next();
   if (req.path.startsWith("/admin")) return next();
   return authMiddleware(req, res, next);
 });
+// Billing webhook needs raw body — must be before express.json()
+initBilling(app);
+
 app.use(express.json());
 const attestRouter = require('./attest');
 app.use('/attest', attestRouter);
@@ -283,7 +287,8 @@ initX402().then(() => app.listen(PORT, function () {
   console.log('Endpoints: /health /score/:mint /history/:mint /stats /recent /db/recent /feed /feed/latest /activity');
   console.log('');
   var { mountAdminRoutes } = require("./apikeys");
-  var { mountCreditRoutes } = require("./credits");
+  var { initBilling } = require("./billing");
+var { mountCreditRoutes } = require("./credits");
   var { rpeRouter } = require("./rpe");
   var { checkBootInvariants } = require("./boot-invariants");
   checkBootInvariants();
