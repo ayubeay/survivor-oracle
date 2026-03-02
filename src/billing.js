@@ -15,6 +15,8 @@ function initBilling(app) {
   var path = require('path');
 
   var DB_PATH = process.env.ATTEST_DB_PATH || path.join(__dirname, '..', 'attestations.db');
+  var DB_DIR = path.dirname(DB_PATH);
+  try { require('fs').mkdirSync(DB_DIR, { recursive: true }); } catch(e) {}
   var db = new Database(DB_PATH);
   db.pragma('journal_mode = WAL');
   db.pragma('busy_timeout = 5000');
