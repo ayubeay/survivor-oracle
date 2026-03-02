@@ -18,6 +18,7 @@ const path = require('path');
 const router  = express.Router();
 const { apiKeyGate } = require("./apikeys");
 const credits = require("./credits");
+const { evaluate: rpeEvaluate, POLICY_VERSION } = require("./rpe");
 const bs58mod = require("bs58");
 const bs58 = bs58mod.default || bs58mod;
 const nacl = require("tweetnacl");
@@ -183,6 +184,12 @@ async function handler(req, res) {
     scored_at: new Date().toISOString(),
   };
   if (pricingMeta) metaObj.pricing = pricingMeta;
+
+  // RPE policy decision
+  try {
+    var policyResult = rpeEvaluate(attestation, { signature_valid: true, signer_matches: true, program_matches: true }, { mode: "auto", amount_usd: 0 });
+    metaObj.policy = { decision: policyResult.decision, reason_codes: policyResult.reason_codes, limits: policyResult.limits, policy_version: policyResult.policy_version };
+  } catch(e) { console.warn("[attest] RPE eval err:", e.message); }
   return res.status(200).json({
     attestation: attestation,
     signature: signature,
