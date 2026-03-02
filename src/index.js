@@ -7,6 +7,7 @@ require("dotenv").config();
  */
 
 const express = require('express');
+var { initBilling } = require("./billing");
 const { fetchTokenData } = require('./fetcher');
 const { calculateSurvivalScore, generateReasons, getConfidence, WEIGHTS, ENGINE, SCORING_VERSION, MODEL_VERSION, buildStructuredReasons, getConfidenceFloat, buildMeta, buildFeatureSnapshot, normalizeRiskTier } = require('./scorer');
 const { startMonitor, getRecentScores, getMonitorStats } = require('./monitor');
@@ -287,7 +288,6 @@ initX402().then(() => app.listen(PORT, function () {
   console.log('Endpoints: /health /score/:mint /history/:mint /stats /recent /db/recent /feed /feed/latest /activity');
   console.log('');
   var { mountAdminRoutes } = require("./apikeys");
-  var { initBilling } = require("./billing");
 var { mountCreditRoutes } = require("./credits");
   var { rpeRouter } = require("./rpe");
   var { checkBootInvariants } = require("./boot-invariants");
