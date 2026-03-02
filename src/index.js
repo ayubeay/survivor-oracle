@@ -37,6 +37,8 @@ app.use(x402SuccessLogger);
 app.use(function(req, res, next) {
   if (req.path.startsWith("/attest")) return next();
   if (req.path.startsWith("/whoami")) return next();
+  if (req.path.startsWith("/rpe")) return next();
+  if (req.path.startsWith("/docs")) return next();
   if (req.path.startsWith("/admin")) return next();
   return authMiddleware(req, res, next);
 });
@@ -279,9 +281,11 @@ initX402().then(() => app.listen(PORT, function () {
   console.log('Endpoints: /health /score/:mint /history/:mint /stats /recent /db/recent /feed /feed/latest /activity');
   console.log('');
   var { mountAdminRoutes } = require("./apikeys");
+  var { rpeRouter } = require("./rpe");
   var { checkBootInvariants } = require("./boot-invariants");
   checkBootInvariants();
   mountAdminRoutes(app);
+  app.use("/rpe", rpeRouter);
   if(process.env.MONITOR_ENABLED!=="false") startMonitor("poll"); else console.log("Monitor: DISABLED (Oracle mode)");
   if(process.env.RESCORE_ENABLED!=="false") startRescorer(30000); else console.log("Rescorer: DISABLED (Oracle mode)");
 }));
