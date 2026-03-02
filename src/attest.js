@@ -17,6 +17,7 @@ const express = require('express');
 const path = require('path');
 const router  = express.Router();
 const { apiKeyGate } = require("./apikeys");
+const credits = require("./credits");
 const bs58mod = require("bs58");
 const bs58 = bs58mod.default || bs58mod;
 const nacl = require("tweetnacl");
