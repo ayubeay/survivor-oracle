@@ -160,17 +160,34 @@ async function handler(req, res) {
     `expires=${attestation.expires_at} nonce=${attestation.nonce.slice(0, 8)}...`
   );
 
+  // Credit charging
+  var pricingMeta = null;
+  if (req.api && req.api.key) {
+    try {
+      var cost = credits.computeCost(score, riskLevel);
+      var wallet = credits.getWallet(req.api.key);
+      if (wallet && wallet.credits > 0) {
+        var charge = credits.chargeCredits(req.api.key, cost.credits, "attest:" + mint);
+        pricingMeta = { charged: cost.credits, credits_remaining: charge.credits, regime: cost.breakdown.regime, breakdown: cost.breakdown };
+      } else {
+        pricingMeta = { charged: 0, credits_remaining: wallet ? wallet.credits : 0, note: "no_credits" };
+      }
+    } catch(e) { console.warn("[attest] credit charge err:", e.message); }
+  }
+
   // Response
+  var metaObj = {
+    score: score,
+    risk_level: riskLevel,
+    reasons: reasons,
+    scored_at: new Date().toISOString(),
+  };
+  if (pricingMeta) metaObj.pricing = pricingMeta;
   return res.status(200).json({
-    attestation,
-    signature,
-    signer,
-    meta: {
-      score,
-      risk_level: riskLevel,
-      reasons,
-      scored_at:  new Date().toISOString(),
-    },
+    attestation: attestation,
+    signature: signature,
+    signer: signer,
+    meta: metaObj,
   });
 }
 
