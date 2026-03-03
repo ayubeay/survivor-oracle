@@ -278,3 +278,14 @@ module.exports = {
   setState,
   mountCreditRoutes,
 };
+
+
+// Flush WAL on shutdown
+process.on("SIGTERM", function() {
+  try {
+    db.pragma("wal_checkpoint(TRUNCATE)");
+    console.log("[credits] WAL checkpoint done");
+    db.close();
+  } catch(e) {}
+  process.exit(0);
+});

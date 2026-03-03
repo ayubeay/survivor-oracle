@@ -245,3 +245,14 @@ module.exports = {
   mountAdminRoutes,
   checkAndConsume,
 };
+
+
+// Flush WAL on shutdown so keys persist across deploys
+process.on("SIGTERM", function() {
+  try {
+    db.pragma("wal_checkpoint(TRUNCATE)");
+    console.log("[apikeys] WAL checkpoint done");
+    db.close();
+  } catch(e) { console.error("[apikeys] shutdown err:", e.message); }
+  process.exit(0);
+});
