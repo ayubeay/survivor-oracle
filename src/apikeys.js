@@ -123,6 +123,10 @@ function mountAdminRoutes(app) {
 
       var info = db.prepare('INSERT INTO api_keys (key, name, tier, daily_limit, enabled, created_at) VALUES (?, ?, ?, ?, 1, ?)').run(key, name, tier, daily_limit, created_at);
 
+      // Diagnostic: count after insert
+      var afterCount = db.prepare("SELECT count(*) as c FROM api_keys").get();
+      console.log("[apikeys] after insert count=" + afterCount.c + " db_path=" + DB_PATH + " file_size=" + require("fs").statSync(DB_PATH).size);
+
       // Round-trip: read back immediately
       var row = db.prepare('SELECT key, name, tier, daily_limit, enabled, created_at FROM api_keys WHERE key = ?').get(key);
 
