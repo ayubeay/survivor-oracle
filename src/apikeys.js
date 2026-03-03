@@ -24,6 +24,8 @@ db.exec(`
 console.log("[apikeys] DB path: " + DB_PATH);
 var initCount = db.prepare("SELECT count(*) as c FROM api_keys").get();
 console.log("[apikeys] Existing keys on boot: " + initCount.c);
+try { var tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all(); console.log("[apikeys] tables: " + JSON.stringify(tables.map(function(t){return t.name;}))); } catch(e) {}
+try { var fstat = require("fs").statSync(DB_PATH); console.log("[apikeys] db file size: " + fstat.size + " bytes"); } catch(e) {}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
