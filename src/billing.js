@@ -11,15 +11,7 @@ function initBilling(app) {
   }
 
   var stripe = require('stripe')(STRIPE_KEY);
-  var Database = require('better-sqlite3');
-  var path = require('path');
-
-  var DB_PATH = process.env.ATTEST_DB_PATH || path.join(__dirname, '..', 'attestations.db');
-  var DB_DIR = path.dirname(DB_PATH);
-  try { require('fs').mkdirSync(DB_DIR, { recursive: true }); } catch(e) {}
-  var db = new Database(DB_PATH);
-  db.pragma('journal_mode = WAL');
-  db.pragma('busy_timeout = 5000');
+  var { db, DB_PATH } = require("./db");
 
   // Schema
   db.exec("\
@@ -140,19 +132,15 @@ function initBilling(app) {
       // Create API key
       var apiKeyModule = require('./apikeys');
       var key = crypto.randomBytes(24).toString('hex');
-      var keyDb = new Database(DB_PATH);
-      keyDb.pragma('journal_mode = WAL');
-      keyDb.pragma('busy_timeout = 5000');
 
-      keyDb.prepare('INSERT INTO api_keys (key, name, tier, daily_limit, enabled, created_at) VALUES (?, ?, ?, ?, 1, ?)').run(
+      db.prepare('INSERT INTO api_keys (key, name, tier, daily_limit, enabled, created_at) VALUES (?, ?, ?, ?, 1, ?)').run(
         key, 'stripe:' + plan.name + ':' + session.id.slice(-8), 'paid', 50000, nowSec()
       );
 
       // Create wallet + add credits
-      var creditsDb = keyDb;
-      creditsDb.prepare('INSERT OR IGNORE INTO credit_wallets (api_key, credits, total_spent, created_at) VALUES (?, 0, 0, ?)').run(key, nowSec());
-      creditsDb.prepare('UPDATE credit_wallets SET credits = credits + ? WHERE api_key = ?').run(plan.credits, key);
-      creditsDb.prepare('INSERT INTO credit_ledger (api_key, action, amount, balance, reason, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
+      db.prepare('INSERT OR IGNORE INTO credit_wallets (api_key, credits, total_spent, created_at) VALUES (?, 0, 0, ?)').run(key, nowSec());
+      db.prepare('UPDATE credit_wallets SET credits = credits + ? WHERE api_key = ?').run(plan.credits, key);
+      db.prepare('INSERT INTO credit_ledger (api_key, action, amount, balance, reason, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
         key, 'topup', plan.credits, plan.credits, 'stripe:' + plan.name, nowSec()
       );
 
@@ -166,7 +154,6 @@ function initBilling(app) {
       ').run(session.id, 'fulfilled', key, plan.credits, 'paid', nowSec(), nowSec(), event.id);
 
       console.log('[billing] Fulfilled: ' + plan.name + ' → key=' + key.slice(0, 8) + '... credits=' + plan.credits);
-      keyDb.close();
       return res.json({ received: true, status: 'fulfilled' });
     }).catch(function (e) {
       console.error('[billing] Fulfillment error:', e.message);

@@ -1,25 +1,6 @@
 'use strict';
 
-const path = require('path');
-const crypto = require('crypto');
-const Database = require('better-sqlite3');
-
-const DB_PATH = process.env.ATTEST_DB_PATH || path.join(__dirname, '..', 'attestations.db');
-const DB_DIR = path.dirname(DB_PATH);
-try { require('fs').mkdirSync(DB_DIR, { recursive: true }); } catch (e) {}
-
-const db = new Database(DB_PATH);
-db.pragma('journal_mode = WAL');
-db.pragma('synchronous = NORMAL');
-db.pragma('busy_timeout = 5000');
-
-// Log real DB path from SQLite itself
-try {
-  var dblist = db.prepare('PRAGMA database_list').all();
-  console.log('[apikeys] PRAGMA database_list: ' + JSON.stringify(dblist));
-} catch (e) {
-  console.log('[apikeys] PRAGMA error: ' + e.message);
-}
+var { db, DB_PATH } = require("./db");
 
 // Schema
 db.exec(`
@@ -39,9 +20,9 @@ db.exec(`
   );
 `);
 
-console.log('[apikeys] DB path: ' + DB_PATH);
-var initCount = db.prepare('SELECT count(*) as c FROM api_keys').get();
-console.log('[apikeys] Existing keys on boot: ' + initCount.c);
+console.log("[apikeys] DB path: " + DB_PATH);
+var initCount = db.prepare("SELECT count(*) as c FROM api_keys").get();
+console.log("[apikeys] Existing keys on boot: " + initCount.c);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

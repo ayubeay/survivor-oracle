@@ -1,16 +1,6 @@
 'use strict';
 
-const path = require('path');
-const Database = require('better-sqlite3');
-
-const DB_PATH = process.env.ATTEST_DB_PATH || path.join(__dirname, '..', 'attestations.db');
-const DB_DIR = path.dirname(DB_PATH);
-try { require('fs').mkdirSync(DB_DIR, { recursive: true }); } catch (e) {}
-
-const db = new Database(DB_PATH);
-db.pragma('journal_mode = WAL');
-db.pragma('synchronous = NORMAL');
-db.pragma('busy_timeout = 5000');
+var { db, DB_PATH } = require("./db");
 
 // ── Schema ────────────────────────────────────────────────────────────────────
 
