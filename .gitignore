@@ -8,3 +8,6 @@ survivor.db-wal
 
 # local sqlite backups
 survivor.db.bak_*
+*.db
+*.db-wal
+*.db-shm
