@@ -4,7 +4,7 @@
   "description": "Autonomous token risk oracle for Solana. Scores new tokens based on survival probability.",
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/index.js",
+    "start": "node src/wait-volume.js && node src/index.js",
     "dev": "node --watch src/index.js",
     "score": "node src/cli.js"
   },
