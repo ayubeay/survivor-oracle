@@ -1,5 +1,6 @@
 'use strict';
 
+var crypto = require("crypto");
 var { db, DB_PATH } = require("./db");
 
 // Schema
