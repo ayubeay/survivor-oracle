@@ -1,7 +1,7 @@
 'use strict';
-// Wait until /app/data is a real mount (not empty container dir)
+// Wait until /data is a real mount (not empty container dir)
 var fs = require('fs');
-var path = '/app/data/attestations.db';
+var path = '/data/attestations.db';
 var maxWait = 15;
 var interval = 1000;
 
