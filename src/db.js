@@ -3,7 +3,7 @@ var path = require('path');
 var fs = require('fs');
 var Database = require('better-sqlite3');
 
-var DB_PATH = process.env.ATTEST_DB_PATH || path.join(__dirname, '..', 'attestations.db');
+var DB_PATH = process.env.ATTEST_DB_PATH || '/tmp/attestations.db';
 var DB_DIR = path.dirname(DB_PATH);
 try { fs.mkdirSync(DB_DIR, { recursive: true }); } catch(e) {}
 
