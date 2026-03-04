@@ -24,8 +24,6 @@ db.exec(`
 console.log("[apikeys] DB path: " + DB_PATH);
 var initCount = db.prepare("SELECT count(*) as c FROM api_keys").get();
 console.log("[apikeys] Existing keys on boot: " + initCount.c);
-try { var tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all(); console.log("[apikeys] tables: " + JSON.stringify(tables.map(function(t){return t.name;}))); } catch(e) {}
-try { var fstat = require("fs").statSync(DB_PATH); console.log("[apikeys] db file size: " + fstat.size + " bytes"); } catch(e) {}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -123,9 +121,6 @@ function mountAdminRoutes(app) {
 
       var info = db.prepare('INSERT INTO api_keys (key, name, tier, daily_limit, enabled, created_at) VALUES (?, ?, ?, ?, 1, ?)').run(key, name, tier, daily_limit, created_at);
 
-      // Diagnostic: count after insert
-      var afterCount = db.prepare("SELECT count(*) as c FROM api_keys").get();
-      console.log("[apikeys] after insert count=" + afterCount.c + " db_path=" + DB_PATH + " file_size=" + require("fs").statSync(DB_PATH).size);
 
       // Round-trip: read back immediately
       var row = db.prepare('SELECT key, name, tier, daily_limit, enabled, created_at FROM api_keys WHERE key = ?').get(key);
@@ -151,9 +146,8 @@ function mountAdminRoutes(app) {
     if (!checkAdmin(req, res)) return;
     try {
       var keys = db.prepare('SELECT key, name, tier, daily_limit, enabled, created_at FROM api_keys ORDER BY created_at DESC').all();
-      var tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all();
       var count = db.prepare('SELECT count(*) as c FROM api_keys').get();
-      res.json({ keys: keys, _debug: { db_path: DB_PATH, tables: tables, count: count } });
+      res.json({ keys: keys, count: count.c });
     } catch (e) {
       res.status(500).json({ error: e.message });
     }
@@ -171,24 +165,56 @@ function mountAdminRoutes(app) {
 
   // Public docs
   app.get("/docs", function (req, res) {
+    var BASE = "https://survivor-oracle-production.up.railway.app";
     res.json({
       name: "SURVIVOR Shield Router Oracle",
-      version: "v1",
-      base_url: "https://survivor-oracle-production.up.railway.app",
+      version: "v2",
+      base_url: BASE,
+      getting_started: {
+        step_1: "GET /billing/plans — view available credit packages",
+        step_2: "POST /billing/checkout {plan:starter} — get Stripe checkout URL",
+        step_3: "Complete payment — receive API key + credits on success page",
+        step_4: "POST /attest with x-api-key header — get signed attestation"
+      },
       endpoints: {
-        "POST /attest": { auth: "x-api-key (paid) or none (free 50/day)", body: { mint: "string", router_program_id: "string" }, returns: "signed attestation + meta" },
-        "POST /attest/verify": { auth: "none", body: "attestation response from /attest", returns: "7-check verification result" },
-        "GET /attest/signer": { auth: "none", returns: "oracle pubkey + program binding" },
-        "GET /attest/cache/stats": { auth: "none", returns: "cache hit/miss metrics" },
-        "GET /whoami": { auth: "x-api-key", returns: "tier + usage + remaining quota" }
+        oracle: {
+          "POST /attest": { auth: "x-api-key", body: { mint: "string (required)", router_program_id: "string (required)" }, returns: "signed attestation + pricing + policy decision", credits: "1-8 per call based on risk + regime" },
+          "POST /attest/verify": { auth: "none", body: "full attestation response", returns: "7-check verification result" },
+          "GET /attest/signer": { auth: "none", returns: "oracle pubkey + program binding" },
+          "GET /attest/cache/stats": { auth: "none", returns: "cache metrics" }
+        },
+        policy: {
+          "POST /rpe/evaluate": { auth: "x-api-key", body: { score: "number", tier: "number", amount_usd: "number" }, returns: "ALLOW/CHALLENGE/DENY + limits" },
+          "POST /rpe/quote": { auth: "none", body: { score: "number", tier: "number", amount_usd: "number" }, returns: "preflight cost + policy simulation (no charge)" },
+          "GET /rpe/policy": { auth: "none", returns: "policy version + thresholds" }
+        },
+        billing: {
+          "GET /billing/plans": { auth: "none", returns: "available credit packages + pricing" },
+          "POST /billing/checkout": { auth: "none", body: { plan: "starter|builder|pro" }, returns: "Stripe checkout URL" },
+          "GET /billing/success": { auth: "none", query: "session_id", returns: "API key + credits after payment" }
+        },
+        account: {
+          "GET /whoami": { auth: "x-api-key", returns: "tier + daily usage + remaining quota" },
+          "GET /credits/balance": { auth: "x-api-key", returns: "credit balance + total spent" },
+          "GET /credits/ledger": { auth: "x-api-key", returns: "last 50 credit transactions" },
+          "GET /pricing": { auth: "none", returns: "current regime + multipliers + example costs" }
+        }
+      },
+      pricing: {
+        model: "Credits deducted per /attest call. Cost varies by token risk + market regime.",
+        plans: { starter: "$29 — 1,000 credits", builder: "$99 — 5,000 credits", pro: "$399 — 25,000 credits" },
+        regimes: { calm: "1x", speculative: "1.2x", mania: "1.5x", crisis: "0.8x" },
+        risk_multipliers: { LOW: "1x", MEDIUM: "1.5x", HIGH: "2.5x", VERY_HIGH: "4x", EXTREME: "8x" },
+        note: "Credits never expire. One-time purchase."
       },
       errors: {
-        invalid_api_key: "401 - key not found",
-        api_key_revoked: "403 - key disabled",
-        rate_limited: "429 - daily limit exceeded",
-        PROGRAM_MISMATCH: "400 - router_program_id does not match configured program"
+        invalid_api_key: "401 — key not found",
+        api_key_revoked: "403 — key disabled",
+        rate_limited: "429 — daily limit exceeded",
+        insufficient_credits: "402 — top up credits",
+        PROGRAM_MISMATCH: "400 — router_program_id mismatch"
       },
-      quick_start: "curl -sX POST $BASE/attest -H \"Content-Type: application/json\" -d '{\"mint\":\"TOKEN_MINT\",\"router_program_id\":\"Dw5bpnjUeY6XX9oCwqbDUTsAH3vAoSSszr98bfSpMcv\"}\" | jq .",
+      security: "Never share your API key. Revoke compromised keys immediately via admin.",
       built_by: "@youngs_modulus"
     });
   });
@@ -211,10 +237,9 @@ function mountAdminRoutes(app) {
   app.get("/admin/keys/stats", function (req, res) {
     if (!checkAdmin(req, res)) return;
     try {
-      var tables = db.prepare("SELECT name FROM sqlite_master WHERE type=\"table\"").all().map(function(r){ return r.name; });
       var total = db.prepare("SELECT count(*) as c FROM api_keys").get().c;
       var enabled = db.prepare("SELECT count(*) as c FROM api_keys WHERE enabled=1").get().c;
-      res.json({ db_path: DB_PATH, tables: tables, keys: { total: total, enabled: enabled } });
+      res.json({ keys: { total: total, enabled: enabled } });
     } catch(e) { res.status(500).json({ error: e.message }); }
   });
 
