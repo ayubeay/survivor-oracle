@@ -163,9 +163,11 @@ a:hover{text-decoration:underline}
 </div>
 <div class="decisions">
   <div class="decision"><div class="state allow">ALLOW</div><div class="desc">Score ≥ 65 — Execute swap. Full attestation returned with signature.</div></div>
-  <div class="decision"><div class="state challenge">CHALLENGE</div><div class="desc">Score 40-64 — Reduce position. Amount limits enforced ($500-$5,000).</div></div>
+  <div class="decision"><div class="state challenge">CHALLENGE</div><div class="desc">Score 40-64 — Proceed only if you reduce size to the returned max. Limits vary by score + regime.</div></div>
   <div class="decision"><div class="state deny">DENY</div><div class="desc">Score &lt; 40 — Block execution. Too risky. Reasons provided.</div></div>
 </div>
+
+<div style="background:#0f172a;border:1px solid #1e293b;border-radius:12px;padding:20px;margin-bottom:32px;font-size:13px;color:#94a3b8;line-height:1.8"><strong style="color:#f8fafc">Key facts:</strong> Typical /attest costs 1-8 credits depending on risk level + regime. /rpe/quote is always free. We never take custody of funds or sign transactions — we sign attestations only. Credits never expire.</div>
 
 <div class="flow">
   <div class="flow-title">Pricing</div>
@@ -193,7 +195,7 @@ a:hover{text-decoration:underline}
         &#x2713; Everything in Starter<br>
         &#x2713; 5x the credits<br>
         &#x2713; Best value per call<br>
-        &#x2713; Priority support<br>
+        &#x2713; Higher daily limits<br>
         &#x2713; Credits never expire
       </div>
     </div>
@@ -205,7 +207,7 @@ a:hover{text-decoration:underline}
         &#x2713; Everything in Builder<br>
         &#x2713; 25x the credits<br>
         &#x2713; Volume pricing<br>
-        &#x2713; Dedicated support<br>
+        &#x2713; Custom integrations<br>
         &#x2713; Credits never expire
       </div>
     </div>
