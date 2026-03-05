@@ -52,15 +52,10 @@ initBilling(app);
 app.use(express.json());
 const attestRouter = require('./attest');
 app.use('/attest', attestRouter);
+var buildLandingPage = require("./landing");
 app.get('/', function (req, res) {
-  var stats = getStats();
-  var extremes = getExtremes(5);
-  var distribution = getScoreDistribution();
-  var hourly = getHourlyActivity();
-  var monStats = getMonitorStats();
-  var recent = getRecentScores().slice(0, 15);
   res.setHeader('Content-Type', 'text/html');
-  var rescoreStats = getRescoreStats(); res.send(generateDashboard(stats, extremes, distribution, hourly, monStats, recent, rescoreStats));
+  res.send(buildLandingPage(VERSION));
 });
 
 app.get('/health', function (req, res) {
