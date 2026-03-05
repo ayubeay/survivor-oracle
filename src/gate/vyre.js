@@ -111,7 +111,7 @@ async function emitVyre({ gate, oracle, verity, iam, runtime }) {
       fs.writeFileSync(path.join(artifactDir, filename), content, 'utf8');
     }
 
-    console.log(`[vyre] emitted ${id}`);
+    console.log(`[vyre] emitted ${id} signed=${!!manifest.signature} signer=${manifest.signer ? manifest.signer.slice(0,8) : 'none'}`);
     return id;
   } catch (e) {
     console.error('[vyre] emit failed:', e?.message);
