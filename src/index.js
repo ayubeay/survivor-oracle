@@ -240,12 +240,12 @@ function generateDashboard(stats, extremes, distribution, hourly, monStats, rece
   var distBars = distribution.map(function (d) {
     var color = riskColors[d.bucket] || '#6b7280';
     var width = stats.totalScored > 0 ? Math.max(2, (d.count / stats.totalScored) * 100) : 2;
-    return '<div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">'
-      + '<span style="width:80px;font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px">' + d.bucket + '</span>'
+    return '<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">'
+      + '<span style="width:80px;font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;font-family:JetBrains Mono,monospace">' + d.bucket + '</span>'
       + '<div style="flex:1;background:#1e293b;border-radius:4px;height:24px;overflow:hidden">'
       + '<div style="width:' + width + '%;height:100%;background:' + color + ';border-radius:4px;transition:width 0.5s"></div>'
       + '</div>'
-      + '<span style="width:50px;text-align:right;font-size:13px;color:#e2e8f0;font-variant-numeric:tabular-nums">' + d.count + '</span>'
+      + '<span style="width:50px;text-align:right;font-size:13px;color:#e2e8f0;font-variant-numeric:tabular-nums;font-family:JetBrains Mono,monospace">' + d.count + '</span>'
       + '</div>';
   }).join('');
 
@@ -254,26 +254,395 @@ function generateDashboard(stats, extremes, distribution, hourly, monStats, rece
     var symbol = sanitizeText(t.symbol || 'UNKNOWN');
     var mintShort = t.mint.slice(0, 6) + '...' + t.mint.slice(-4);
     var time = t.detectedAt ? new Date(t.detectedAt).toLocaleTimeString('en-US', { hour12: false }) : '-';
+    var decisionColor = t.riskLevel === 'LOW' ? '#22c55e' : t.riskLevel === 'MEDIUM' ? '#eab308' : t.riskLevel === 'HIGH' ? '#f97316' : '#ef4444';
+    var decision = t.score >= 65 ? 'ALLOW' : t.score >= 40 ? 'CHALLENGE' : 'DENY';
+    var decisionBg = t.score >= 65 ? 'rgba(34,197,94,0.12)' : t.score >= 40 ? 'rgba(234,179,8,0.12)' : 'rgba(239,68,68,0.12)';
     return '<tr>'
-      + '<td style="padding:8px 12px;color:#e2e8f0;font-weight:500">' + symbol + '</td>'
-      + '<td style="padding:8px 12px"><code style="font-size:11px;color:#64748b;background:#1e293b;padding:2px 6px;border-radius:3px">' + mintShort + '</code></td>'
-      + '<td style="padding:8px 12px;text-align:center"><span style="display:inline-block;min-width:32px;padding:2px 8px;border-radius:4px;font-weight:700;font-size:13px;color:#0f172a;background:' + color + '">' + t.score + '</span></td>'
-      + '<td style="padding:8px 12px;color:' + color + ';font-size:12px;text-transform:uppercase;letter-spacing:0.5px">' + t.riskLevel + '</td>'
-      + '<td style="padding:8px 12px;color:#64748b;font-size:12px;font-variant-numeric:tabular-nums">' + time + '</td>'
+      + '<td style="padding:10px 14px;color:#e2e8f0;font-weight:600;font-size:13px">' + symbol + '</td>'
+      + '<td style="padding:10px 14px"><code style="font-size:11px;color:#64748b;background:#1e293b;padding:2px 6px;border-radius:3px">' + mintShort + '</code></td>'
+      + '<td style="padding:10px 14px;text-align:center"><span style="display:inline-block;min-width:36px;padding:3px 10px;border-radius:5px;font-weight:800;font-size:14px;color:#0f172a;background:' + color + '">' + t.score + '</span></td>'
+      + '<td style="padding:10px 14px;color:' + color + ';font-size:11px;text-transform:uppercase;letter-spacing:0.5px;font-family:JetBrains Mono,monospace">' + t.riskLevel + '</td>'
+      + '<td style="padding:10px 14px"><span style="font-size:11px;font-weight:700;font-family:JetBrains Mono,monospace;color:' + decisionColor + ';background:' + decisionBg + ';padding:3px 8px;border-radius:4px">' + decision + '</span></td>'
+      + '<td style="padding:10px 14px;color:#64748b;font-size:12px;font-variant-numeric:tabular-nums;font-family:JetBrains Mono,monospace">' + time + '</td>'
       + '</tr>';
   }).join('');
 
-  var safestCards = extremes.safest.slice(0, 3).map(function (t) {
+  var safestCards = extremes.safest.slice(0, 4).map(function (t) {
     var color = riskColors[t.risk_level] || '#22c55e';
-    return '<div style="background:#0f172a;border:1px solid #1e293b;border-radius:8px;padding:14px 16px;min-width:160px">'
-      + '<div style="font-size:13px;font-weight:600;color:#e2e8f0">' + sanitizeText(t.symbol || t.name || 'UNKNOWN') + '</div>'
-      + '<div style="font-size:28px;font-weight:800;color:' + color + ';margin:4px 0">' + t.score + '</div>'
-      + '<div style="font-size:11px;color:#64748b;text-transform:uppercase">' + t.risk_level + '</div>'
+    return '<div style="background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:16px 18px;min-width:140px;flex:1">'
+      + '<div style="font-size:12px;font-weight:700;color:#94a3b8;margin-bottom:4px;font-family:JetBrains Mono,monospace">' + sanitizeText(t.symbol || t.name || 'UNKNOWN') + '</div>'
+      + '<div style="font-size:36px;font-weight:800;color:' + color + ';margin:4px 0;line-height:1;font-family:JetBrains Mono,monospace">' + t.score + '</div>'
+      + '<div style="font-size:10px;color:#475569;text-transform:uppercase;letter-spacing:1px">ALLOW · LOW RISK</div>'
       + '</div>';
   }).join('');
 
-  return '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="30"><title>SURVIVOR Oracle \u2014 Live Dashboard</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"><style>*{margin:0;padding:0;box-sizing:border-box}body{background:#020617;color:#e2e8f0;font-family:Inter,system-ui,sans-serif;min-height:100vh}.noise{position:fixed;inset:0;pointer-events:none;opacity:.025;background-image:url("data:image/svg+xml,%3Csvg viewBox=\'0 0 256 256\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cfilter id=\'n\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.9\' numOctaves=\'4\' stitchTiles=\'stitch\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23n)\'/%3E%3C/svg%3E")}.glow{position:fixed;top:-200px;left:50%;transform:translateX(-50%);width:600px;height:400px;background:radial-gradient(ellipse,rgba(249,115,22,.08) 0%,transparent 70%);pointer-events:none}.container{max-width:1200px;margin:0 auto;padding:32px 24px;position:relative;z-index:1}.header{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:40px;flex-wrap:wrap;gap:12px}.title{font-family:JetBrains Mono,monospace;font-size:28px;font-weight:800;letter-spacing:-.5px}.title span{color:#f97316}.badge{font-family:JetBrains Mono,monospace;font-size:11px;color:#64748b;background:#1e293b;padding:4px 10px;border-radius:4px;border:1px solid #334155}.feature-badge{font-family:JetBrains Mono,monospace;font-size:10px;color:#22c55e;background:#0f2a1a;padding:3px 8px;border-radius:3px;border:1px solid #166534}.live-dot{display:inline-block;width:7px;height:7px;background:#22c55e;border-radius:50%;margin-right:6px;animation:pulse 2s infinite}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-bottom:36px}.stat-card{background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:18px 20px}.stat-label{font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}.stat-value{font-family:JetBrains Mono,monospace;font-size:32px;font-weight:800;color:#f8fafc;line-height:1}.stat-sub{font-size:12px;color:#475569;margin-top:4px}.section{margin-bottom:36px}.section-title{font-family:JetBrains Mono,monospace;font-size:14px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:16px;display:flex;align-items:center;gap:8px}.section-title::before{content:"";display:block;width:3px;height:14px;background:#f97316;border-radius:2px}.table-wrap{overflow-x:auto;border:1px solid #1e293b;border-radius:10px;background:#0f172a}table{width:100%;border-collapse:collapse}thead th{padding:10px 12px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.5px;text-align:left;border-bottom:1px solid #1e293b;background:#020617}tbody tr{border-bottom:1px solid #0f172a}tbody tr:hover{background:#1e293b40}.safest-row{display:flex;gap:12px;flex-wrap:wrap}.footer{margin-top:48px;padding-top:24px;border-top:1px solid #1e293b;font-size:12px;color:#475569;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}.footer a{color:#f97316;text-decoration:none}.api-ref{background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:18px 20px;font-family:JetBrains Mono,monospace;font-size:12px;color:#94a3b8;line-height:1.8}.api-ref span{color:#f97316}.features-grid{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px}@media(max-width:640px){.title{font-size:20px}.stat-value{font-size:24px}.stats-grid{grid-template-columns:repeat(2,1fr)}}</style></head><body><div class="noise"></div><div class="glow"></div><div class="container"><div class="header"><div><div class="title">SURVIVOR<span>.</span>oracle</div><div style="font-size:13px;color:#64748b;margin-top:4px">Multi-engine token risk intelligence for Solana</div></div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="badge"><span class="live-dot"></span>LIVE</span><span class="badge">v' + VERSION + '</span><span class="badge">Agent #598</span></div></div><div class="features-grid"><span class="feature-badge">\u2713 Structured Reasons</span><span class="feature-badge">\u2713 Temporal Rescoring</span><span class="feature-badge">\u2713 Bait-Switch Detection</span><span class="feature-badge">\u2713 RugCheck Integration</span><span class="feature-badge">\u2713 Engine Agreement</span></div><div class="stats-grid"><div class="stat-card"><div class="stat-label">Tokens Scored</div><div class="stat-value">' + stats.totalScored + '</div><div class="stat-sub">' + stats.last24h + ' in last 24h</div></div><div class="stat-card"><div class="stat-label">Avg Risk Score</div><div class="stat-value">' + stats.averageScore + '</div><div class="stat-sub">out of 100 (higher = safer)</div></div><div class="stat-card"><div class="stat-label">Rescored</div><div class="stat-value">' + rs.rescored + '</div><div class="stat-sub">5m / 30m / 2h windows</div></div><div class="stat-card"><div class="stat-label">Non-Mints Filtered</div><div class="stat-value">' + stats.skippedNonMints + '</div><div class="stat-sub">SOL/USDC/junk blocked</div></div><div class="stat-card"><div class="stat-label">Uptime</div><div class="stat-value" style="font-size:22px">' + formatUptime(process.uptime()) + '</div><div class="stat-sub">' + monStats.inMemoryCache + ' mints cached</div></div></div><div class="section"><div class="section-title">Risk Distribution</div><div style="background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:20px">' + (distBars || '<div style="color:#475569;font-size:13px">No data yet...</div>') + '</div></div><div class="section"><div class="section-title">Safest Tokens Detected</div><div class="safest-row">' + (safestCards || '<div style="color:#475569;font-size:13px">Scoring in progress...</div>') + '</div></div><div class="section"><div class="section-title">Recent Scores (live)</div><div class="table-wrap"><table><thead><tr><th>Token</th><th>Mint</th><th style="text-align:center">Score</th><th>Risk</th><th>Time</th></tr></thead><tbody>' + (recentRows || '<tr><td colspan="5" style="padding:20px;color:#475569;text-align:center">Waiting for first tokens...</td></tr>') + '</tbody></table></div></div><div class="section"><div class="section-title">Pricing</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:36px"><div style="background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:24px"><div style="font-size:11px;color:#22c55e;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Free</div><div style="font-family:JetBrains Mono,monospace;font-size:28px;font-weight:800;color:#f8fafc">$0</div><div style="font-size:12px;color:#475569;margin:8px 0 16px">50 calls/day</div><div style="font-size:13px;color:#94a3b8;line-height:1.8">\u2713 /score with structured reasons<br>\u2713 /history rescore timeline<br>\u2713 Rate limited to 50/day<br>\u2717 No external signals<br>\u2717 No debug weights</div></div><div style="background:#0f172a;border:2px solid #f97316;border-radius:10px;padding:24px;position:relative"><div style="position:absolute;top:-10px;right:16px;background:#f97316;color:#020617;font-size:10px;font-weight:700;padding:2px 10px;border-radius:4px">POPULAR</div><div style="font-size:11px;color:#f97316;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Early Access</div><div style="font-family:JetBrains Mono,monospace;font-size:28px;font-weight:800;color:#f8fafc">$199<span style="font-size:14px;color:#64748b;font-weight:400">/mo</span></div><div style="font-size:12px;color:#475569;margin:8px 0 16px">~50K calls/month</div><div style="font-size:13px;color:#94a3b8;line-height:1.8">\u2713 Everything in Free<br>\u2713 RugCheck external signals<br>\u2713 Engine agreement detection<br>\u2713 API key access<br>\u2713 Email support</div></div><div style="background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:24px"><div style="font-size:11px;color:#ef4444;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Pro \u2014 10 slots</div><div style="font-family:JetBrains Mono,monospace;font-size:28px;font-weight:800;color:#f8fafc">$499<span style="font-size:14px;color:#64748b;font-weight:400">/mo</span></div><div style="font-size:12px;color:#475569;margin:8px 0 16px">~250K calls/month</div><div style="font-size:13px;color:#94a3b8;line-height:1.8">\u2713 Everything in Early<br>\u2713 Debug weights access<br>\u2713 Priority response<br>\u2713 Custom signal requests<br>\u2713 Dedicated support</div></div></div><div style="text-align:center;margin-bottom:36px"><a href="https://x.com/youngs_modulus" target="_blank" style="display:inline-block;background:#f97316;color:#020617;font-family:JetBrains Mono,monospace;font-size:14px;font-weight:700;padding:12px 32px;border-radius:8px;text-decoration:none">DM Contact: X @youngs_modulus · Telegram @Zimmerberon · Discord @Heywhy8181</a></div></div><div class="section"><div class="section-title">API Reference</div><div class="api-ref"><span>GET</span> /health \u2014 Status, uptime, score count, rescore stats<br><span>GET</span> /score/:mint \u2014 Full risk score with structured reasons<br><span>GET</span> /score/:mint?quick=true \u2014 Score + confidence + reason codes<br><span>GET</span> /score/:mint?ext=true \u2014 Include RugCheck external signal + agreement<br><span>GET</span> /score/:mint?debug=true \u2014 Include internal weights (gated)<br><span>GET</span> /history/:mint \u2014 Rescore timeline with deltas + volatility flags<br><span>GET</span> /stats \u2014 Analytics with safest/riskiest tokens<br><span>GET</span> /recent \u2014 Recently auto-detected tokens<br><span>GET</span> /db/recent \u2014 Persistent scores from database<br><span>GET</span> /feed \u2014 Filtered feed for agent integrations<br><span>GET</span> /activity \u2014 Hourly scoring activity</div></div><div class="footer"><div>SURVIVOR Agent #598 \u2022 Colosseum AI Agent Hackathon 2026 \u2022 <a href="https://github.com/ayubeay/survivor-oracle" target="_blank">GitHub</a></div><div>Auto-refreshes every 30s \u2022 ' + new Date().toISOString() + '</div></div></div></body></html>';
+  var regimeColor = { calm: '#22c55e', speculative: '#eab308', mania: '#f97316', crisis: '#ef4444' };
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="refresh" content="30">
+<title>SURVIVOR Oracle — Shield Router · Live Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#020617;color:#e2e8f0;font-family:'DM Sans',system-ui,sans-serif;min-height:100vh;overflow-x:hidden}
+code,pre,.mono{font-family:'JetBrains Mono',monospace}
+a{color:#f97316;text-decoration:none}
+a:hover{text-decoration:underline}
+
+.noise{position:fixed;inset:0;pointer-events:none;opacity:.02;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+.glow{position:fixed;top:-200px;left:50%;transform:translateX(-50%);width:800px;height:500px;background:radial-gradient(ellipse,rgba(249,115,22,.06) 0%,transparent 70%);pointer-events:none}
+
+.container{max-width:1100px;margin:0 auto;padding:48px 24px;position:relative;z-index:1}
+
+/* ── HEADER ── */
+.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:72px;flex-wrap:wrap;gap:16px}
+.logo{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:800;letter-spacing:-0.5px}
+.logo span{color:#f97316}
+.header-badges{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.badge{font-family:'JetBrains Mono',monospace;font-size:11px;color:#64748b;background:#0f172a;padding:4px 10px;border-radius:4px;border:1px solid #1e293b}
+.live-dot{display:inline-block;width:6px;height:6px;background:#22c55e;border-radius:50%;margin-right:5px;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ── HERO ── */
+.hero{text-align:center;padding:24px 0 80px;max-width:720px;margin:0 auto}
+.hero-eyebrow{font-family:'JetBrains Mono',monospace;font-size:11px;color:#f97316;text-transform:uppercase;letter-spacing:3px;margin-bottom:20px}
+.hero-title{font-size:52px;font-weight:700;line-height:1.1;letter-spacing:-1.5px;color:#f8fafc;margin-bottom:20px}
+.hero-title em{color:#f97316;font-style:normal}
+.hero-sub{font-size:18px;color:#64748b;line-height:1.6;margin-bottom:36px;max-width:560px;margin-left:auto;margin-right:auto}
+.hero-cta{display:inline-flex;align-items:center;gap:12px;background:#f97316;color:#020617;font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;padding:14px 28px;border-radius:8px;text-decoration:none;transition:opacity 0.2s}
+.hero-cta:hover{opacity:0.85;text-decoration:none}
+.hero-cta-sub{font-size:12px;color:#475569;margin-top:12px;font-family:'JetBrains Mono',monospace}
+
+/* ── CODE BLOCK ── */
+.code-block{background:#0f172a;border:1px solid #1e293b;border-radius:12px;padding:24px;text-align:left;margin:48px 0;overflow-x:auto}
+.code-block pre{font-family:'JetBrains Mono',monospace;font-size:12px;color:#94a3b8;line-height:1.8;white-space:pre}
+.code-block .kw{color:#f97316}
+.code-block .str{color:#22c55e}
+.code-block .cm{color:#475569}
+
+/* ── DIVIDER ── */
+.section-divider{border:none;border-top:1px solid #1e293b;margin:64px 0}
+
+/* ── FEATURES ── */
+.features-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;margin-bottom:64px}
+.feature-card{background:#0f172a;border:1px solid #1e293b;border-radius:12px;padding:24px}
+.feature-icon{font-size:24px;margin-bottom:12px}
+.feature-title{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:#f8fafc;margin-bottom:8px}
+.feature-desc{font-size:14px;color:#64748b;line-height:1.6}
+
+/* ── HOW IT WORKS ── */
+.steps{display:flex;gap:0;margin-bottom:64px;overflow-x:auto}
+.step{flex:1;min-width:140px;padding:24px 16px;text-align:center;position:relative}
+.step:not(:last-child)::after{content:"→";position:absolute;right:-8px;top:50%;transform:translateY(-50%);color:#334155;font-size:16px}
+.step-num{font-family:'JetBrains Mono',monospace;font-size:10px;color:#f97316;text-transform:uppercase;letter-spacing:2px;margin-bottom:8px}
+.step-label{font-size:13px;color:#94a3b8;font-weight:500}
+
+/* ── DECISIONS ── */
+.decisions{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:64px}
+.decision-card{background:#0f172a;border:1px solid #1e293b;border-radius:12px;padding:20px}
+.decision-card.allow{border-color:rgba(34,197,94,0.3)}
+.decision-card.challenge{border-color:rgba(234,179,8,0.3)}
+.decision-card.deny{border-color:rgba(239,68,68,0.3)}
+.decision-label{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:800;margin-bottom:8px}
+.decision-card.allow .decision-label{color:#22c55e}
+.decision-card.challenge .decision-label{color:#eab308}
+.decision-card.deny .decision-label{color:#ef4444}
+.decision-desc{font-size:13px;color:#64748b;line-height:1.5}
+
+/* ── PRICING ── */
+.pricing-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px;margin-bottom:64px}
+.price-card{background:#0f172a;border:1px solid #1e293b;border-radius:12px;padding:28px;position:relative}
+.price-card.popular{border-color:#f97316}
+.popular-tag{position:absolute;top:-10px;right:16px;background:#f97316;color:#020617;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;padding:3px 10px;border-radius:4px;text-transform:uppercase;letter-spacing:1px}
+.price-tier{font-family:'JetBrains Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:2px;color:#64748b;margin-bottom:12px}
+.price-amount{font-family:'JetBrains Mono',monospace;font-size:36px;font-weight:800;color:#f8fafc;line-height:1;margin-bottom:4px}
+.price-credits{font-size:13px;color:#475569;margin-bottom:20px}
+.price-features{font-size:13px;color:#94a3b8;line-height:2}
+
+/* ── INTEL SECTION ── */
+.intel-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:12px}
+.intel-title{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:800;color:#f8fafc;text-transform:uppercase;letter-spacing:2px}
+.intel-subtitle{font-size:13px;color:#475569;margin-top:4px}
+.regime-pill{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;padding:4px 12px;border-radius:20px;text-transform:uppercase;letter-spacing:1px}
+
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:28px}
+.stat-card{background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:16px 18px}
+.stat-label{font-size:10px;color:#475569;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px;font-family:'JetBrains Mono',monospace}
+.stat-value{font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:800;color:#f8fafc;line-height:1}
+.stat-sub{font-size:11px;color:#334155;margin-top:4px}
+
+.section-label{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:2px;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.section-label::before{content:"";display:block;width:3px;height:12px;background:#f97316;border-radius:2px}
+
+.table-wrap{overflow-x:auto;border:1px solid #1e293b;border-radius:10px;background:#0f172a;margin-bottom:28px}
+table{width:100%;border-collapse:collapse}
+thead th{padding:10px 14px;font-size:10px;color:#475569;text-transform:uppercase;letter-spacing:1px;text-align:left;border-bottom:1px solid #1e293b;background:#020617;font-family:'JetBrains Mono',monospace}
+tbody tr{border-bottom:1px solid #0f172a40}
+tbody tr:hover{background:#1e293b30}
+
+.safest-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:28px}
+
+/* ── API REF ── */
+.api-ref{background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:20px 24px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#64748b;line-height:2.2}
+.api-ref .method{color:#f97316;font-weight:700}
+.api-ref .ep{color:#94a3b8}
+.api-ref .auth{font-size:10px;color:#334155;background:#1e293b;padding:1px 5px;border-radius:3px;margin-left:4px}
+
+/* ── FOOTER ── */
+.footer{margin-top:64px;padding-top:24px;border-top:1px solid #1e293b;font-size:12px;color:#334155;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;font-family:'JetBrains Mono',monospace}
+.footer a{color:#475569}
+
+@media(max-width:640px){
+  .hero-title{font-size:34px}
+  .decisions{grid-template-columns:1fr}
+  .steps{flex-direction:column}
+  .step:not(:last-child)::after{content:"↓";right:auto;left:50%;top:auto;bottom:-12px}
+  .stats-grid{grid-template-columns:repeat(2,1fr)}
 }
+</style>
+</head>
+<body>
+<div class="noise"></div>
+<div class="glow"></div>
+<div class="container">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="logo">SURVIVOR<span>.</span>oracle</div>
+    <div class="header-badges">
+      <span class="badge"><span class="live-dot"></span>LIVE</span>
+      <span class="badge">v${VERSION}</span>
+      <span class="badge">Agent #598</span>
+      <span class="badge">Shield Router</span>
+    </div>
+  </div>
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-eyebrow">Risk-Aware Execution Control · Solana</div>
+    <h1 class="hero-title">Sign every swap.<br><em>Gate every risk.</em></h1>
+    <p class="hero-sub">Signed Ed25519 attestations, regime-adaptive credit pricing, and three-state policy decisions — in one API call. Drop-in execution control for any Solana agent stack.</p>
+    <a href="https://x.com/youngs_modulus" target="_blank" class="hero-cta">Get API Key — From $29 →</a>
+    <div class="hero-cta-sub">DM @youngs_modulus · contact@identityaware.ai</div>
+  </div>
+
+  <!-- CODE DEMO -->
+  <div class="code-block">
+    <pre><span class="cm">// npm i @survivorshield/shield</span>
+<span class="kw">const</span> { createShield } = require(<span class="str">'@survivorshield/shield'</span>);
+<span class="kw">const</span> shield = createShield({ apiKey: process.env.SURVIVOR_KEY });
+
+<span class="kw">const</span> gate = <span class="kw">await</span> shield.attestAndGate({
+  mint:      <span class="str">"TOKEN_MINT"</span>,
+  amountUsd: 2500,
+});
+
+<span class="kw">if</span> (gate.allow)     executeSwap();
+<span class="kw">if</span> (gate.challenge) reducePosition(gate.limits.max_amount_usd);
+<span class="kw">if</span> (gate.deny)      console.log(<span class="str">"Blocked"</span>, gate.reasonCodes);</pre>
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- FEATURES -->
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon">🔏</div>
+      <div class="feature-title">Ed25519 Attestations</div>
+      <div class="feature-desc">Every risk score is cryptographically signed with borsh serialization. Verifiable on-chain. Tamper-proof audit trail per decision.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">⚡</div>
+      <div class="feature-title">Three-State Decisions</div>
+      <div class="feature-desc">ALLOW / CHALLENGE / DENY with score-based amount limits. Not just pass/fail — graduated risk control that scales with exposure.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📊</div>
+      <div class="feature-title">Regime-Adaptive Pricing</div>
+      <div class="feature-desc">Credits adjust dynamically across calm, speculative, mania, and crisis regimes. Pay less when risk is low. Cost reflects real conditions.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🛡</div>
+      <div class="feature-title">Drop-in SDK</div>
+      <div class="feature-desc">npm i @survivorshield/shield — gate swaps in 3 lines. TypeScript definitions included. Zero dependencies.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">💳</div>
+      <div class="feature-title">Self-Serve Billing</div>
+      <div class="feature-desc">Buy credits via Stripe. Get your API key instantly. No DMs. No approval process. Start in 60 seconds.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🔍</div>
+      <div class="feature-title">Preflight Quotes</div>
+      <div class="feature-desc">Simulate policy decisions and credit costs before executing. No charge for /rpe/quote calls. Know your cost before committing.</div>
+    </div>
+  </div>
+
+  <!-- HOW IT WORKS -->
+  <div class="section-label">How It Works</div>
+  <div class="steps">
+    <div class="step"><div class="step-num">01</div><div class="step-label">Buy Credits<br><span style="color:#334155;font-size:11px">Stripe checkout</span></div></div>
+    <div class="step"><div class="step-num">02</div><div class="step-label">Get API Key<br><span style="color:#334155;font-size:11px">Instant delivery</span></div></div>
+    <div class="step"><div class="step-num">03</div><div class="step-label">Call /attest<br><span style="color:#334155;font-size:11px">Score + sign + decide</span></div></div>
+    <div class="step"><div class="step-num">04</div><div class="step-label">Gate Execution<br><span style="color:#334155;font-size:11px">ALLOW / CHALLENGE / DENY</span></div></div>
+    <div class="step"><div class="step-num">05</div><div class="step-label">Credits Deduct<br><span style="color:#334155;font-size:11px">Risk-adjusted cost</span></div></div>
+  </div>
+
+  <!-- POLICY DECISIONS -->
+  <div class="section-label" style="margin-bottom:20px">Policy Decisions</div>
+  <div class="decisions">
+    <div class="decision-card allow">
+      <div class="decision-label">ALLOW</div>
+      <div class="decision-desc">Score ≥ 65 — Execute swap. Full attestation returned with Ed25519 signature. Capital cleared for deployment.</div>
+    </div>
+    <div class="decision-card challenge">
+      <div class="decision-label">CHALLENGE</div>
+      <div class="decision-desc">Score 40–64 — Proceed only if you reduce size to the returned max. Limits vary by score and active regime.</div>
+    </div>
+    <div class="decision-card deny">
+      <div class="decision-label">DENY</div>
+      <div class="decision-desc">Score &lt; 40 — Hard block. Structured reason codes returned for audit. No capital at risk. No attestation issued.</div>
+    </div>
+  </div>
+  <div style="background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:16px 20px;margin-bottom:64px;font-size:13px;color:#475569;line-height:1.7">
+    Typical /attest costs 1–8 credits depending on risk level and regime. /rpe/quote is always free. We never take custody of funds or sign transactions — attestations only. Credits never expire.
+  </div>
+
+  <!-- PRICING -->
+  <div class="section-label" style="margin-bottom:20px">Pricing</div>
+  <div class="pricing-grid">
+    <div class="price-card">
+      <div class="price-tier">Starter</div>
+      <div class="price-amount">$29</div>
+      <div class="price-credits">1,000 credits — one-time</div>
+      <div class="price-features">✓ Signed attestations<br>✓ Three-state policy<br>✓ Regime-aware pricing<br>✓ SDK access<br>✓ Credits never expire</div>
+    </div>
+    <div class="price-card popular">
+      <div class="popular-tag">POPULAR</div>
+      <div class="price-tier">Builder</div>
+      <div class="price-amount">$99</div>
+      <div class="price-credits">5,000 credits — one-time</div>
+      <div class="price-features">✓ Everything in Starter<br>✓ 5× the credits<br>✓ Best value per call<br>✓ Higher daily limits<br>✓ Credits never expire</div>
+    </div>
+    <div class="price-card">
+      <div class="price-tier">Pro</div>
+      <div class="price-amount">$399</div>
+      <div class="price-credits">25,000 credits — one-time</div>
+      <div class="price-features">✓ Everything in Builder<br>✓ 25× the credits<br>✓ Volume pricing<br>✓ Custom integrations<br>✓ Credits never expire</div>
+    </div>
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- LIVE INTELLIGENCE FEED -->
+  <div class="intel-header">
+    <div>
+      <div class="intel-title"><span class="live-dot"></span> Live Intelligence Feed</div>
+      <div class="intel-subtitle">Oracle scoring in real time — proof of work, not a pitch deck</div>
+    </div>
+    <span class="regime-pill" style="background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.2)">REGIME: CALM · 1×</span>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Tokens Scored</div>
+      <div class="stat-value">${stats.totalScored}</div>
+      <div class="stat-sub">${stats.last24h} in last 24h</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Avg Risk Score</div>
+      <div class="stat-value">${stats.averageScore}</div>
+      <div class="stat-sub">higher = safer · out of 100</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Rescored</div>
+      <div class="stat-value">${rs.rescored}</div>
+      <div class="stat-sub">5m / 30m / 2h windows</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Filtered</div>
+      <div class="stat-value">${stats.skippedNonMints}</div>
+      <div class="stat-sub">SOL/USDC/junk blocked</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Uptime</div>
+      <div class="stat-value" style="font-size:20px">${formatUptime(process.uptime())}</div>
+      <div class="stat-sub">${monStats.inMemoryCache} mints cached</div>
+    </div>
+  </div>
+
+  <!-- RISK DISTRIBUTION -->
+  <div class="section-label">Risk Distribution</div>
+  <div style="background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:20px 24px;margin-bottom:28px">
+    ${distBars || '<div style="color:#334155;font-size:13px;font-family:JetBrains Mono,monospace">No data yet — scoring in progress...</div>'}
+  </div>
+
+  <!-- SAFEST TOKENS -->
+  <div class="section-label">Safest Tokens Detected</div>
+  <div class="safest-row">
+    ${safestCards || '<div style="color:#334155;font-size:13px;font-family:JetBrains Mono,monospace">Scoring in progress...</div>'}
+  </div>
+
+  <!-- RECENT SCORES -->
+  <div class="section-label">Recent Scores · Live</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Token</th>
+          <th>Mint</th>
+          <th style="text-align:center">Score</th>
+          <th>Risk</th>
+          <th>Gate Decision</th>
+          <th>Time</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${recentRows || '<tr><td colspan="6" style="padding:24px;color:#334155;text-align:center;font-family:JetBrains Mono,monospace;font-size:12px">Waiting for first tokens...</td></tr>'}
+      </tbody>
+    </table>
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- API REFERENCE -->
+  <div class="section-label" style="margin-bottom:16px">API Reference</div>
+  <div class="api-ref">
+    <span class="method">POST</span> <span class="ep">/attest</span><span class="auth">x-api-key</span> — Signed attestation + pricing + policy decision<br>
+    <span class="method">POST</span> <span class="ep">/attest/verify</span> — 7-check signature verification<br>
+    <span class="method">GET</span>  <span class="ep">/attest/signer</span> — Oracle pubkey + program binding<br>
+    <span class="method">POST</span> <span class="ep">/rpe/quote</span> — Preflight policy + cost simulation <em style="color:#22c55e;font-size:10px">free</em><br>
+    <span class="method">POST</span> <span class="ep">/rpe/evaluate</span><span class="auth">x-api-key</span> — Full policy evaluation<br>
+    <span class="method">GET</span>  <span class="ep">/rpe/policy</span> — Policy version + thresholds<br>
+    <span class="method">GET</span>  <span class="ep">/billing/plans</span> — Available credit packages<br>
+    <span class="method">POST</span> <span class="ep">/billing/checkout</span> — Create Stripe checkout session<br>
+    <span class="method">GET</span>  <span class="ep">/credits/balance</span><span class="auth">x-api-key</span> — Check credit balance<br>
+    <span class="method">GET</span>  <span class="ep">/credits/ledger</span><span class="auth">x-api-key</span> — Credit transaction history<br>
+    <span class="method">GET</span>  <span class="ep">/pricing</span> — Current regime + multipliers<br>
+    <span class="method">GET</span>  <span class="ep">/whoami</span><span class="auth">x-api-key</span> — Account info + usage<br>
+    <span class="method">GET</span>  <span class="ep">/score/:mint</span> — Token risk score with structured reasons<br>
+    <span class="method">GET</span>  <span class="ep">/health</span> — Status, uptime, score count<br>
+    <span class="method">GET</span>  <span class="ep">/docs</span> — Full API documentation (JSON)
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <div>SURVIVOR Agent #598 · Shield Router Oracle · <a href="https://github.com/ayubeay/survivor-oracle" target="_blank">GitHub</a> · <a href="https://npmjs.com/package/@survivorshield/shield" target="_blank">npm</a> · Built by <a href="https://x.com/youngs_modulus" target="_blank">@youngs_modulus</a></div>
+    <div>Auto-refreshes every 30s · ${new Date().toISOString()}</div>
+  </div>
+
+</div>
+</body>
+</html>`;
+}
+
+
 initX402().then(() => app.listen(PORT, function () {
   console.log('');
   console.log('SURVIVOR Oracle v' + VERSION + ' running on http://localhost:' + PORT);
