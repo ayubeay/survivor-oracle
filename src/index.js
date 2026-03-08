@@ -275,10 +275,12 @@ function generateDashboard(stats, extremes, distribution, hourly, monStats, rece
 
   var safestCards = extremes.safest.slice(0, 4).map(function (t) {
     var color = riskColors[t.risk_level] || '#22c55e';
+    var gateDecision = t.score >= 65 ? 'ALLOW' : t.score >= 40 ? 'CHALLENGE' : 'DENY';
+    var gateColor = t.score >= 65 ? '#22c55e' : t.score >= 40 ? '#eab308' : '#ef4444';
     return '<div style="background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:16px 18px;min-width:140px;flex:1">'
       + '<div style="font-size:12px;font-weight:700;color:#94a3b8;margin-bottom:4px;font-family:JetBrains Mono,monospace">' + sanitizeText(t.symbol || t.name || 'UNKNOWN') + '</div>'
       + '<div style="font-size:36px;font-weight:800;color:' + color + ';margin:4px 0;line-height:1;font-family:JetBrains Mono,monospace">' + t.score + '</div>'
-      + '<div style="font-size:10px;color:#475569;text-transform:uppercase;letter-spacing:1px">ALLOW · LOW RISK</div>'
+      + '<div style="font-size:10px;color:' + gateColor + ';text-transform:uppercase;letter-spacing:1px;font-family:JetBrains Mono,monospace">' + gateDecision + ' · ' + (t.risk_level || 'LOW') + '</div>'
       + '</div>';
   }).join('');
 
@@ -431,8 +433,8 @@ tbody tr:hover{background:#1e293b30}
   <!-- HERO -->
   <div class="hero">
     <div class="hero-eyebrow">Risk-Aware Execution Control · Solana</div>
-    <h1 class="hero-title">Sign every swap.<br><em>Gate every risk.</em></h1>
-    <p class="hero-sub">Signed Ed25519 attestations, regime-adaptive credit pricing, and three-state policy decisions — in one API call. Drop-in execution control for any Solana agent stack.</p>
+    <h1 class="hero-title">Sign every decision.<br><em>Gate every risk.</em></h1>
+    <p class="hero-sub">Risk gate for Solana bots, scanners, and execution agents. Prevent unsafe swaps before capital is deployed — signed attestations, regime-adaptive pricing, three-state policy in one API call.</p>
     <a href="https://x.com/youngs_modulus" target="_blank" class="hero-cta">Get API Key — From $29 →</a>
     <div class="hero-cta-sub">DM @youngs_modulus · contact@identityaware.ai</div>
   </div>
@@ -525,20 +527,20 @@ tbody tr:hover{background:#1e293b30}
     <div class="price-card">
       <div class="price-tier">Starter</div>
       <div class="price-amount">$29</div>
-      <div class="price-credits">1,000 credits — one-time</div>
+      <div class="price-credits">1,000 credits — one-time<br><span style="font-size:11px;color:#334155">~500–1,000 standard checks</span></div>
       <div class="price-features">✓ Signed attestations<br>✓ Three-state policy<br>✓ Regime-aware pricing<br>✓ SDK access<br>✓ Credits never expire</div>
     </div>
     <div class="price-card popular">
       <div class="popular-tag">POPULAR</div>
       <div class="price-tier">Builder</div>
       <div class="price-amount">$99</div>
-      <div class="price-credits">5,000 credits — one-time</div>
+      <div class="price-credits">5,000 credits — one-time<br><span style="font-size:11px;color:#334155">~2,500–5,000 standard checks</span></div>
       <div class="price-features">✓ Everything in Starter<br>✓ 5× the credits<br>✓ Best value per call<br>✓ Higher daily limits<br>✓ Credits never expire</div>
     </div>
     <div class="price-card">
       <div class="price-tier">Pro</div>
       <div class="price-amount">$399</div>
-      <div class="price-credits">25,000 credits — one-time</div>
+      <div class="price-credits">25,000 credits — one-time<br><span style="font-size:11px;color:#334155">~2,500–5,000 standard checks</span></div>
       <div class="price-features">✓ Everything in Builder<br>✓ 25× the credits<br>✓ Volume pricing<br>✓ Custom integrations<br>✓ Credits never expire</div>
     </div>
   </div>
@@ -550,6 +552,7 @@ tbody tr:hover{background:#1e293b30}
     <div>
       <div class="intel-title"><span class="live-dot"></span> Live Intelligence Feed</div>
       <div class="intel-subtitle">Oracle scoring in real time — proof of work, not a pitch deck</div>
+    <div style="font-size:11px;color:#475569;margin-top:6px;font-family:JetBrains Mono,monospace">Risk labels describe token profile. Gate decisions reflect policy thresholds and exposure sizing.</div>
     </div>
     <span class="regime-pill" style="background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.2)">REGIME: CALM · 1×</span>
   </div>
