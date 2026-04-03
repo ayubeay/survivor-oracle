@@ -16,9 +16,8 @@
 const http = require('http');
 const { buildPolicy } = require('./policy');
 const { enforce } = require('./enforce');
-const { emitVyre } = require('./vyre');
 
-const PORT = process.env.PORT || process.env.GATE_PORT || 8787;
+const PORT = process.env.GATE_PORT ? Number(process.env.GATE_PORT) : 8787;
 const SURVIVOR_URL = (process.env.SURVIVOR_URL || 'https://survivor-oracle-production.up.railway.app').replace(/\/$/, '');
 const TIMEOUT_MS = process.env.GATE_TIMEOUT_MS ? Number(process.env.GATE_TIMEOUT_MS) : 8000;
 
@@ -146,21 +145,7 @@ async function handleGate(req, res) {
   // 3. Enforce — get gate decision
   const decision = enforce(intent, policy);
 
-  // 4. Emit VYRE artifact (fire-and-forget)
-  if (process.env.VYRE_EMIT === '1') {
-    emitVyre({
-      gate:    { ...decision, evaluated_at: new Date().toISOString() },
-      oracle:  scoreData.oracle_meta,
-      runtime: {
-        gate_url:   process.env.GATE_URL    || '',
-        oracle_url: process.env.SURVIVOR_URL || '',
-        git_sha:    process.env.GIT_SHA     || 'unknown',
-        env:        process.env.NODE_ENV    || 'production',
-      }
-    }).catch(e => console.error('[vyre] emit error:', e?.message));
-  }
-
-  // 5. Return full gate result
+  // 4. Return full gate result
   return jsonResponse(res, 200, {
     decision,
     oracle: scoreData.oracle_meta,
