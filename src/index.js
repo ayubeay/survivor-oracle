@@ -114,6 +114,25 @@ app.get('/score/:mint', async function (req, res) {
       breakdown: result.breakdown,
       holderNote: tokenData.holderNote, liquidityUsd: tokenData.liquidityUsd,
       ageInHours: tokenData.ageInHours, timestamp: result.timestamp,
+      signals: {
+        mint_authority_revoked: tokenData.mintAuthorityRevoked ?? null,
+        freeze_authority_revoked: tokenData.freezeAuthorityRevoked ?? null,
+        lp: tokenData.lpInfo ? {
+          locked: !!tokenData.lpInfo.locked,
+          percent_locked: tokenData.lpInfo.percentLocked ?? null,
+          lock_duration_days: tokenData.lpInfo.lockDuration ?? null,
+        } : null,
+        top10_holder_percent: tokenData.top10HolderPercent ?? null,
+        total_holders: tokenData.totalHolders ?? null,
+        holder_note: tokenData.holderNote ?? null,
+        dev_activity: tokenData.devActivity ? {
+          recent_sells: tokenData.devActivity.recentSells ?? null,
+          percent_sold: tokenData.devActivity.percentSold ?? null,
+          wallet_age_days: tokenData.devActivity.walletAge ?? null,
+        } : null,
+        age_hours: tokenData.ageInHours ?? null,
+        liquidity_usd: tokenData.liquidityUsd ?? null,
+      },
       _tokenData: tokenData,
     };
     if (result.mode) fullResult.mode = result.mode;
