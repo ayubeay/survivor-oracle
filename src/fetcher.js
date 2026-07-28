@@ -166,8 +166,8 @@ async function fetchTokenData(mintAddress) {
       mintAuthorityRevoked: mintInfo.mintAuthorityRevoked, freezeAuthorityRevoked: mintInfo.freezeAuthorityRevoked,
       decimals: mintInfo.decimals, supply: mintInfo.supply,
       totalHolders: null, top10HolderPercent: null, topHolders: [], holderNote: 'MEGACAP_SKIP',
-      priceUsd: 0, liquidityUsd: 999999999, volume24h: 0, ageInHours: 99999, createdAt: null,
-      lpInfo: { locked: true, lockDuration: 9999, percentLocked: 100 },
+      priceUsd: null, liquidityUsd: null, volume24h: null, ageInHours: null, createdAt: null,
+      lpInfo: null,
       devActivity: null, fetchedAt: new Date().toISOString(), megacap: mega,
     };
   }
