@@ -133,6 +133,11 @@ app.get('/score/:mint', async function (req, res) {
         } : null,
         age_hours: tokenData.ageInHours ?? null,
         liquidity_usd: tokenData.liquidityUsd ?? null,
+        liquidity_pool: tokenData.pairAddress ? { pair: tokenData.pairAddress, dex: tokenData.dexId ?? null } : null,
+        observed_total_liquidity_usd: tokenData.observedTotalLiquidityUsd ?? null,
+        pair_count: tokenData.pairCount ?? null,
+        earliest_observed_pair_age_hours: tokenData.ageInHours ?? null,
+        market_data_source: "DexScreener",
       },
       _tokenData: tokenData,
       // megacap mode uses sentinel values, not measurements — do not publish them as facts

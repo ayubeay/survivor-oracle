@@ -119,6 +119,13 @@ async function getDexScreenerData(mintAddress) {
     var mainPair = data.pairs.reduce(function (best, pair) {
       return (pair.liquidity && pair.liquidity.usd || 0) > (best.liquidity && best.liquidity.usd || 0) ? pair : best;
     });
+    var earliestCreatedAt = data.pairs.reduce(function (min, pair) {
+      var t = pair.pairCreatedAt || 0;
+      return (t && (!min || t < min)) ? t : min;
+    }, 0);
+    var totalLiquidityUsd = data.pairs.reduce(function (sum, pair) {
+      return sum + ((pair.liquidity && pair.liquidity.usd) || 0);
+    }, 0);
     var tokenData = null;
     if (mainPair.baseToken && mainPair.baseToken.address === mintAddress) tokenData = mainPair.baseToken;
     else if (mainPair.quoteToken && mainPair.quoteToken.address === mintAddress) tokenData = mainPair.quoteToken;
@@ -130,7 +137,10 @@ async function getDexScreenerData(mintAddress) {
       liquidityUsd: (mainPair.liquidity && mainPair.liquidity.usd) || 0,
       volume24h: (mainPair.volume && mainPair.volume.h24) || 0,
       priceChange24h: (mainPair.priceChange && mainPair.priceChange.h24) || 0,
-      pairAddress: mainPair.pairAddress, dexId: mainPair.dexId, createdAt: mainPair.pairCreatedAt,
+      pairAddress: mainPair.pairAddress, dexId: mainPair.dexId,
+      createdAt: earliestCreatedAt || mainPair.pairCreatedAt,
+      deepestPoolCreatedAt: mainPair.pairCreatedAt,
+      observedTotalLiquidityUsd: totalLiquidityUsd, pairCount: data.pairs.length,
     };
   } catch (error) {
     console.error('[SURVIVOR] DexScreener error:', error.message);
