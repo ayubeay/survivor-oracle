@@ -93,6 +93,7 @@ app.get('/score/:mint', async function (req, res) {
           reasons: cReasons,
           meta: buildMeta(cr._tokenData || {}, cReasons),
           name: cr.name, symbol: cr.symbol, riskLevel: cr.riskLevel, cached: true,
+          signals: cr.signals ?? null,
         });
       }
       return res.json(cached.data);
@@ -134,6 +135,8 @@ app.get('/score/:mint', async function (req, res) {
         liquidity_usd: tokenData.liquidityUsd ?? null,
       },
       _tokenData: tokenData,
+      // megacap mode uses sentinel values, not measurements — do not publish them as facts
+      ...(tokenData.megacap ? { signals_note: "MEGACAP_MODE: signals are not measured for recognized major assets" } : {}),
     };
     if (result.mode) fullResult.mode = result.mode;
     if (!quick) {
