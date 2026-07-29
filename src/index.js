@@ -113,6 +113,7 @@ app.get('/score/:mint', async function (req, res) {
       meta: meta,
       riskLevel: result.riskLevel,
       breakdown: result.breakdown,
+      coverage: result.coverage,
       holderNote: tokenData.holderNote, liquidityUsd: tokenData.liquidityUsd,
       ageInHours: tokenData.ageInHours, timestamp: result.timestamp,
       signals: {

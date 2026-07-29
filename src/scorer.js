@@ -80,7 +80,10 @@ function calculateSurvivalScore(tokenData) {
         holderConcentration: 'N/A', devWalletActivity: 'N/A',
         tokenAge: 100, liquidityDepth: 100,
       },
-      weights: WEIGHTS, timestamp: new Date().toISOString(),
+      weights: WEIGHTS,
+      coverage: { signals_expected: 7, signals_measured: 0, weight_coverage_percent: 0,
+                  unmeasured: [], note: 'MEGACAP_MODE: score is assigned, not computed from signals' },
+      timestamp: new Date().toISOString(),
     };
   }
 
@@ -103,6 +106,27 @@ function calculateSurvivalScore(tokenData) {
   totalScore += (breakdown.tokenAge * WEIGHTS.tokenAge) / 100;
   totalScore += (breakdown.liquidityDepth * WEIGHTS.liquidityDepth) / 100;
 
+  // Measurement coverage - reported, not applied. Scoring is unchanged in this version.
+  var signalChecks = [
+    { signal: 'mintAuthority',       w: WEIGHTS.mintAuthority,          measured: typeof tokenData.mintAuthorityRevoked === 'boolean',                              reason: 'MINT_INFO_UNAVAILABLE' },
+    { signal: 'freezeAuthority',     w: WEIGHTS.freezeAuthority,        measured: typeof tokenData.freezeAuthorityRevoked === 'boolean',                            reason: 'MINT_INFO_UNAVAILABLE' },
+    { signal: 'lpLocked',            w: WEIGHTS.lpLocked,               measured: !!tokenData.lpInfo,                                                               reason: 'LP_DATA_UNAVAILABLE' },
+    { signal: 'holderConcentration', w: WEIGHTS.topHolderConcentration, measured: typeof tokenData.top10HolderPercent === 'number',                                 reason: tokenData.holderNote || 'HOLDER_DATA_UNAVAILABLE' },
+    { signal: 'devWalletActivity',   w: WEIGHTS.devWalletActivity,      measured: !!tokenData.devActivity,                                                          reason: 'DEV_ACTIVITY_NOT_COLLECTED' },
+    { signal: 'tokenAge',            w: WEIGHTS.tokenAge,               measured: typeof tokenData.ageInHours === 'number' && tokenData.ageInHours > 0,             reason: 'NO_MARKET_HISTORY' },
+    { signal: 'liquidityDepth',      w: WEIGHTS.liquidityDepth,         measured: typeof tokenData.liquidityUsd === 'number' && tokenData.liquidityUsd > 0,         reason: 'NO_LIQUIDITY_DATA' },
+  ];
+  var totalW = signalChecks.reduce(function (s, c) { return s + c.w; }, 0);
+  var measuredW = signalChecks.reduce(function (s, c) { return s + (c.measured ? c.w : 0); }, 0);
+  var coverage = {
+    signals_expected: signalChecks.length,
+    signals_measured: signalChecks.filter(function (c) { return c.measured; }).length,
+    weight_coverage_percent: totalW > 0 ? Math.round((measuredW / totalW) * 100) : 0,
+    unmeasured: signalChecks.filter(function (c) { return !c.measured; })
+      .map(function (c) { return { signal: c.signal, weight: c.w, reason: c.reason }; }),
+    note: 'reported only; unmeasured signals still contribute their neutral default to the score in this version',
+  };
+
   var score = Math.round(totalScore);
   var riskLevel;
   if (score >= 75) riskLevel = 'LOW';
@@ -111,7 +135,7 @@ function calculateSurvivalScore(tokenData) {
   else if (score >= 40) riskLevel = 'VERY_HIGH';
   else riskLevel = 'EXTREME';
 
-  return { score: score, riskLevel: riskLevel, breakdown: breakdown, weights: WEIGHTS, timestamp: new Date().toISOString() };
+  return { score: score, riskLevel: riskLevel, breakdown: breakdown, weights: WEIGHTS, coverage: coverage, timestamp: new Date().toISOString() };
 }
 
 function generateReasons(tokenData, breakdown) {
