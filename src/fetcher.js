@@ -86,7 +86,7 @@ async function getHolderDistribution(mintAddress) {
       return { totalHolders: null, top10HolderPercent: null, topHolders: [], note: 'HOLDER_QUERY_FAILED' };
     }
     if (!largestAccounts.value || largestAccounts.value.length === 0) {
-      return { totalHolders: 0, top10HolderPercent: 100, topHolders: [] };
+      return { totalHolders: 0, top10HolderPercent: null, topHolders: [], note: 'NO_HOLDER_ACCOUNTS_RETURNED' };
     }
     var top10 = largestAccounts.value.slice(0, 10);
     // raw base units, same denomination as mint supply - percentage is computed in
