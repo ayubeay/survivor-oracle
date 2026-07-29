@@ -88,13 +88,19 @@ async function getHolderDistribution(mintAddress) {
     if (!largestAccounts.value || largestAccounts.value.length === 0) {
       return { totalHolders: 0, top10HolderPercent: 100, topHolders: [] };
     }
-    var totalFromTop = largestAccounts.value.reduce(function (sum, acc) { return sum + Number(acc.amount); }, 0);
     var top10 = largestAccounts.value.slice(0, 10);
-    var top10Amount = top10.reduce(function (sum, acc) { return sum + Number(acc.amount); }, 0);
-    var top10Percent = totalFromTop > 0 ? (top10Amount / totalFromTop) * 100 : 100;
+    // raw base units, same denomination as mint supply - percentage is computed in
+    // fetchTokenData against total supply, not against the sampled accounts
+    var top10RawUnits = largestAccounts.value.slice(0, 10)
+      .reduce(function (sum, acc) { return sum + BigInt(acc.amount); }, 0n);
+    var sampledRawUnits = largestAccounts.value
+      .reduce(function (sum, acc) { return sum + BigInt(acc.amount); }, 0n);
+    var totalFromTop = Number(sampledRawUnits);
     return {
       totalHolders: largestAccounts.value.length,
-      top10HolderPercent: Math.round(top10Percent * 100) / 100,
+      top10RawUnits: top10RawUnits.toString(),
+      sampledRawUnits: sampledRawUnits.toString(),
+      top10HolderPercent: null,   // set by fetchTokenData once supply is known
       topHolders: top10.map(function (acc, i) {
         return { rank: i + 1, address: acc.address.toString(), amount: acc.amount,
           percent: totalFromTop > 0 ? (Number(acc.amount) / totalFromTop) * 100 : 0 };
@@ -175,6 +181,21 @@ async function fetchTokenData(mintAddress) {
     getTokenMintInfo(mintAddress), getHolderDistribution(mintAddress), getDexScreenerData(mintAddress),
   ]);
   var mintInfoResult = results[0]; var holders = results[1]; var dexData = results[2];
+  // concentration relative to total supply, not to the sampled accounts
+  var concentrationBasis = null;
+  try {
+    var supplyRaw = BigInt(mintInfoResult.supply || '0');
+    if (supplyRaw > 0n && holders && holders.top10RawUnits) {
+      var t10 = BigInt(holders.top10RawUnits);
+      holders.top10HolderPercent = Math.round(Number(t10 * 1000000n / supplyRaw) / 100) / 100;
+      concentrationBasis = {
+        denominator: 'total_supply',
+        supply_raw: supplyRaw.toString(),
+        accounts_sampled: holders.totalHolders,
+        sampled_raw_units: holders.sampledRawUnits,
+      };
+    }
+  } catch (e) { console.log('[SURVIVOR] concentration calc failed: ' + e.message); }
   var ageInHours = dexData && dexData.createdAt ? calculateTokenAge(dexData.createdAt) : 0;
   return {
     address: mintAddress,
@@ -184,6 +205,7 @@ async function fetchTokenData(mintAddress) {
     freezeAuthorityRevoked: mintInfoResult.freezeAuthorityRevoked,
     decimals: mintInfoResult.decimals, supply: mintInfoResult.supply,
     totalHolders: holders.totalHolders, top10HolderPercent: holders.top10HolderPercent,
+    concentrationBasis: concentrationBasis,
     topHolders: holders.topHolders, holderNote: holders.note || null,
     priceUsd: dexData && dexData.priceUsd || 0, liquidityUsd: dexData && dexData.liquidityUsd || 0,
     pairAddress: dexData && dexData.pairAddress || null, dexId: dexData && dexData.dexId || null,

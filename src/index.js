@@ -126,6 +126,7 @@ app.get('/score/:mint', async function (req, res) {
         top10_holder_percent: tokenData.top10HolderPercent ?? null,
         total_holders: tokenData.totalHolders ?? null,
         holder_note: tokenData.holderNote ?? null,
+        concentration_basis: tokenData.concentrationBasis ?? null,
         dev_activity: tokenData.devActivity ? {
           recent_sells: tokenData.devActivity.recentSells ?? null,
           percent_sold: tokenData.devActivity.percentSold ?? null,

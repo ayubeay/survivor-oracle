@@ -152,7 +152,7 @@ function getConfidence(tokenData) {
 // =========================================================
 
 const ENGINE = "survivor.oracle";
-const SCORING_VERSION = "0.4.2";
+const SCORING_VERSION = "0.4.3";
 const MODEL_VERSION = "scoring-v3";
 
 const CONTRIBUTION_BUCKETS = [0.10, 0.15, 0.20, 0.25, 0.30];
