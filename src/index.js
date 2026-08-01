@@ -118,6 +118,7 @@ app.get('/score/:mint', async function (req, res) {
       ageInHours: tokenData.ageInHours, timestamp: result.timestamp,
       signals: {
         mint_authority_revoked: tokenData.mintAuthorityRevoked ?? null,
+        mint_authority_class: tokenData.mintAuthorityClass ?? null,
         freeze_authority_revoked: tokenData.freezeAuthorityRevoked ?? null,
         lp: tokenData.lpInfo ? {
           locked: !!tokenData.lpInfo.locked,

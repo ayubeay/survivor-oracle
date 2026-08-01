@@ -62,8 +62,70 @@ async function getTokenMintInfo(mintAddress) {
     address: mintAddress, decimals: parsed.decimals, supply: parsed.supply,
     mintAuthority: parsed.mintAuthority, freezeAuthority: parsed.freezeAuthority,
     mintAuthorityRevoked: parsed.mintAuthority === null,
+    mintAuthorityRaw: parsed.mintAuthority,
     freezeAuthorityRevoked: parsed.freezeAuthority === null,
   };
+}
+
+/* Layer 1: mint authority classification from on-chain evidence only.
+   Reports what can be proven from the mint address. Does not infer which program
+   controls a PDA - that is not derivable from the mint and belongs to Layer 2. */
+const TOKEN_PROGRAM = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
+const SYSTEM_PROGRAM = '11111111111111111111111111111111';
+
+async function classifyMintAuthority(mintAddress, mintAuthority) {
+  if (!mintAuthority) {
+    return { state: 'REVOKED', authority: null, evidence: 'mint authority is null on the mint account' };
+  }
+  try {
+    var authPk = new PublicKey(mintAuthority);
+    var onCurve = PublicKey.isOnCurve(authPk.toBytes());
+    var info = await connection.getAccountInfo(authPk);
+    var owner = info ? info.owner.toBase58() : null;
+
+    if (!onCurve) {
+      return {
+        state: 'PROGRAM_DERIVED',
+        authority: mintAuthority,
+        authority_account_exists: !!info,
+        authority_account_owner: owner,
+        evidence: 'authority address is off the ed25519 curve, so it is program-derived and cannot be signed by a keypair',
+        limitation: 'the controlling program is not derivable from the mint address alone; governance and upgradeability are unknown at this layer',
+      };
+    }
+
+    if (owner === TOKEN_PROGRAM && info && info.data.length === 355 && info.data[2] === 1) {
+      var m = info.data[0], n = info.data[1];
+      var signers = [];
+      for (var i = 0; i < n; i++) {
+        signers.push(new PublicKey(info.data.slice(3 + i * 32, 35 + i * 32)).toBase58());
+      }
+      return {
+        state: 'MULTISIG',
+        authority: mintAuthority,
+        threshold_m: m, signers_n: n, signers: signers,
+        evidence: 'authority is an initialized SPL Token multisig requiring ' + m + ' of ' + n + ' signatures',
+      };
+    }
+
+    if (owner === SYSTEM_PROGRAM) {
+      return {
+        state: 'WALLET',
+        authority: mintAuthority,
+        evidence: 'authority is an on-curve system account; a single keypair can mint',
+      };
+    }
+
+    return {
+      state: 'ON_CURVE_OTHER',
+      authority: mintAuthority,
+      authority_account_owner: owner,
+      evidence: 'authority is on-curve but owned by ' + (owner || 'no account'),
+      limitation: 'control model not classified',
+    };
+  } catch (e) {
+    return { state: 'UNRESOLVED', authority: mintAuthority, evidence: 'classification failed: ' + e.message };
+  }
 }
 
 async function getHolderDistribution(mintAddress) {
@@ -181,6 +243,7 @@ async function fetchTokenData(mintAddress) {
     getTokenMintInfo(mintAddress), getHolderDistribution(mintAddress), getDexScreenerData(mintAddress),
   ]);
   var mintInfoResult = results[0]; var holders = results[1]; var dexData = results[2];
+  var mintAuthorityClass = await classifyMintAuthority(mintAddress, mintInfoResult.mintAuthorityRaw);
   // concentration relative to total supply, not to the sampled accounts
   var concentrationBasis = null;
   try {
@@ -202,6 +265,7 @@ async function fetchTokenData(mintAddress) {
     name: sanitizeText(dexData && dexData.name || 'Unknown'),
     symbol: sanitizeText(dexData && dexData.symbol || 'UNKNOWN'),
     mintAuthorityRevoked: mintInfoResult.mintAuthorityRevoked,
+    mintAuthorityClass: mintAuthorityClass,
     freezeAuthorityRevoked: mintInfoResult.freezeAuthorityRevoked,
     decimals: mintInfoResult.decimals, supply: mintInfoResult.supply,
     totalHolders: holders.totalHolders, top10HolderPercent: holders.top10HolderPercent,
