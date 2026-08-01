@@ -1,6 +1,6 @@
 # Signal definition: mint authority
 
-**Status:** DESIGN - implementation deferred until semantics are agreed
+**Status:** IMPLEMENTED as Layer 1 in scoring 0.4.4 (2026-08-01). Layer 2 governance enrichment still reserved.
 **Drafted:** 2026-07-29
 **Trigger:** mSOL scored 47/VERY_HIGH. MINT_AUTHORITY_PRESENT (weight 20) scored 0 because
 the mint authority is not revoked - but mSOL's authority is a Marinade stake pool PDA that
@@ -82,3 +82,37 @@ This is a taxonomy problem, not a calculation error. The arithmetic was correct;
 heuristic is being applied across asset classes with different trust models. Any fix is a
 scoring-methodology change requiring a version bump and validation across LSTs, wrapped
 assets, stablecoins and memecoins.
+
+
+## Implemented: Layer 1 authority doctrine v1 (scoring 0.4.4)
+
+Credit reflects only what the mint address proves. No credit for assumed program behaviour,
+custody arrangements, or institutional identity.
+
+| state | subscore | basis |
+|---|---|---|
+| REVOKED | 100 | no mint authority exists |
+| PROGRAM_DERIVED | 60 | off-curve, so no keypair can sign; controlling program unknown |
+| MULTISIG | min(75, 35 + 25*(m/n) + 5*min(m,4)) | threshold known; signer identity and custody unknown |
+| WALLET | 0 | a single on-curve system account can mint |
+| ON_CURVE_OTHER / UNRESOLVED | null | excluded from scoring - unknown is not unsafe |
+
+The 75 multisig cap exists because Layer 1 cannot establish whether signers are independent,
+who custodies the keys, whether the signer set can be changed, or whether off-chain issuance
+controls exist. A multisig should never equal a revoked authority on structure alone.
+
+### Why the four-way PROGRAM_CONTROLLED split was not implemented
+It is not resolvable from a mint address. An off-curve authority PDA carries no pointer to
+the program that derives it - mSOL's authority account does not exist on chain, and
+jitoSOL's and bSOL's are System-owned with no data. Derivation only runs forward. Verifying
+the controlling program requires a candidate program ID, which means a maintained registry.
+That belongs to Layer 2, clearly marked as enrichment rather than derivation.
+
+### Measured effect
+mSOL 47 -> 59, jitoSOL 50 -> 62. BONK unchanged at 67 (already REVOKED). USDC and USDT
+unchanged (megacap assigns their score) but now report 2-of-4 and 2-of-3 respectively.
+The megacap fast path was changed to classify authority before returning: it may skip
+costly market analysis, but not cheap decision-relevant facts.
+
+These assets did not become safer. The scorer stopped treating a program-derived authority
+as equivalent to an anonymous keypair.
