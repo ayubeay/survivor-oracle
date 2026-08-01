@@ -228,10 +228,13 @@ async function fetchTokenData(mintAddress) {
   if (mega) {
     var mintInfo;
     try { mintInfo = await getTokenMintInfo(mintAddress); }
-    catch (e) { mintInfo = { mintAuthorityRevoked: false, freezeAuthorityRevoked: false, decimals: 0, supply: '0' }; }
+    catch (e) { mintInfo = { mintAuthorityRevoked: false, freezeAuthorityRevoked: false, decimals: 0, supply: '0', mintAuthorityRaw: null }; }
+    // the fast path may skip costly market analysis, but not cheap decision-relevant facts
+    var megaAuthorityClass = await classifyMintAuthority(mintAddress, mintInfo.mintAuthorityRaw);
     return {
       address: mintAddress, name: mega.name, symbol: mega.symbol,
       mintAuthorityRevoked: mintInfo.mintAuthorityRevoked, freezeAuthorityRevoked: mintInfo.freezeAuthorityRevoked,
+      mintAuthorityClass: megaAuthorityClass,
       decimals: mintInfo.decimals, supply: mintInfo.supply,
       totalHolders: null, top10HolderPercent: null, topHolders: [], holderNote: 'MEGACAP_SKIP',
       priceUsd: null, liquidityUsd: null, volume24h: null, ageInHours: null, createdAt: null,

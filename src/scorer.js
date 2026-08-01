@@ -15,8 +15,28 @@ const WEIGHTS = {
   liquidityDepth: 10,
 };
 
-function scoreMintAuthority(revoked) {
-  return revoked ? 100 : 0;
+/* Layer 1 authority doctrine v1 (2026-08-01).
+   Credit reflects only what the mint address proves. No credit for assumed program
+   behaviour, custody arrangements, or institutional identity. */
+const AUTHORITY_DOCTRINE_VERSION = 'layer1-authority-v1';
+
+function scoreMintAuthority(revoked, authorityClass) {
+  if (!authorityClass) return revoked ? 100 : 0;
+  switch (authorityClass.state) {
+    case 'REVOKED':
+      return 100;
+    case 'PROGRAM_DERIVED':
+      return 60;
+    case 'MULTISIG': {
+      var m = authorityClass.threshold_m || 1;
+      var n = authorityClass.signers_n || 1;
+      return Math.round(Math.min(75, 35 + 25 * (m / n) + 5 * Math.min(m, 4)));
+    }
+    case 'WALLET':
+      return 0;
+    default:
+      return null;
+  }
 }
 
 function scoreFreezeAuthority(revoked) {
@@ -88,7 +108,7 @@ function calculateSurvivalScore(tokenData) {
   }
 
   var breakdown = {
-    mintAuthority: scoreMintAuthority(tokenData.mintAuthorityRevoked),
+    mintAuthority: scoreMintAuthority(tokenData.mintAuthorityRevoked, tokenData.mintAuthorityClass),
     freezeAuthority: scoreFreezeAuthority(tokenData.freezeAuthorityRevoked),
     lpLocked: scoreLpLocked(tokenData.lpInfo),
     holderConcentration: scoreHolderConcentration(tokenData.top10HolderPercent),
@@ -108,7 +128,7 @@ function calculateSurvivalScore(tokenData) {
 
   // Measurement coverage - reported, not applied. Scoring is unchanged in this version.
   var signalChecks = [
-    { signal: 'mintAuthority',       w: WEIGHTS.mintAuthority,          measured: typeof tokenData.mintAuthorityRevoked === 'boolean',                              reason: 'MINT_INFO_UNAVAILABLE' },
+    { signal: 'mintAuthority',       w: WEIGHTS.mintAuthority,          measured: breakdown.mintAuthority !== null && breakdown.mintAuthority !== undefined,                              reason: 'MINT_INFO_UNAVAILABLE' },
     { signal: 'freezeAuthority',     w: WEIGHTS.freezeAuthority,        measured: typeof tokenData.freezeAuthorityRevoked === 'boolean',                            reason: 'MINT_INFO_UNAVAILABLE' },
     { signal: 'lpLocked',            w: WEIGHTS.lpLocked,               measured: !!tokenData.lpInfo,                                                               reason: 'LP_DATA_UNAVAILABLE' },
     { signal: 'holderConcentration', w: WEIGHTS.topHolderConcentration, measured: typeof tokenData.top10HolderPercent === 'number',                                 reason: tokenData.holderNote || 'HOLDER_DATA_UNAVAILABLE' },
@@ -176,7 +196,7 @@ function getConfidence(tokenData) {
 // =========================================================
 
 const ENGINE = "survivor.oracle";
-const SCORING_VERSION = "0.4.3";
+const SCORING_VERSION = "0.4.4";
 const MODEL_VERSION = "scoring-v3";
 
 const CONTRIBUTION_BUCKETS = [0.10, 0.15, 0.20, 0.25, 0.30];
@@ -282,4 +302,4 @@ function buildFeatureSnapshot(breakdown, tokenData) {
   return { age_bucket: ageBucket(tokenData.ageInHours), liquidity_bucket: liquidityBucket(tokenData.liquidityUsd), holder_bucket: holderBucket(breakdown.holderConcentration) };
 }
 
-module.exports = { calculateSurvivalScore, generateReasons, getConfidence, WEIGHTS, ENGINE, SCORING_VERSION, MODEL_VERSION, buildStructuredReasons, getConfidenceFloat, buildMeta, buildFeatureSnapshot, normalizeRiskTier };
+module.exports = { AUTHORITY_DOCTRINE_VERSION, calculateSurvivalScore, generateReasons, getConfidence, WEIGHTS, ENGINE, SCORING_VERSION, MODEL_VERSION, buildStructuredReasons, getConfidenceFloat, buildMeta, buildFeatureSnapshot, normalizeRiskTier };
