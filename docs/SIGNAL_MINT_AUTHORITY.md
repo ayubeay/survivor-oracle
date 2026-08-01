@@ -37,6 +37,23 @@ program-derived by construction.
 4. WALLET_CONTROLLED - on-curve authority owned by the System Program. A single signer can
    mint arbitrarily. This is the case the original heuristic was written for.
 
+## Refinement (2026-07-31): PROGRAM_CONTROLLED is not one state
+A PDA is safer than an unconstrained wallet only under conditions the current taxonomy does
+not capture. An upgradeable program can rewrite its own minting rules, so the risk has moved
+one layer down rather than disappearing. Proposed subdivision:
+
+    PROGRAM_CONTROLLED_IMMUTABLE    upgrade authority revoked; minting rules cannot change
+    PROGRAM_CONTROLLED_GOVERNED     upgrade authority is a multisig or governance program
+    PROGRAM_CONTROLLED_UPGRADEABLE  a single upgrade authority can change minting behaviour
+    PROGRAM_CONTROLLED_UNKNOWN      upgrade authority not resolved
+
+Classification should be reported regardless; scoring credit should depend on which of these
+applies. Treating all PDAs as equally safe would repeat the pattern this document exists to
+correct - a label standing in for a measurement.
+
+Resolvable with one lookup: the ProgramData account is derived from the program ID under
+BPFLoaderUpgradeab1e11111111111111111111111; a null upgrade authority means immutable.
+
 ## Open questions before implementing
 1. Should PROGRAM_CONTROLLED score as REVOKED, partially, or be excluded from scoring?
    Excluding is most honest but requires the renormalization deferred from 0.5.0.
