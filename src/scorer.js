@@ -43,8 +43,11 @@ function scoreFreezeAuthority(revoked) {
   return revoked ? 100 : 0;
 }
 
+/* Returns null when LP lock status was not measured. An absent measurement is not
+   evidence of an unlocked pool, and must not be scored as though it were. */
 function scoreLpLocked(lpInfo) {
-  if (!lpInfo || !lpInfo.locked) return 0;
+  if (!lpInfo) return null;
+  if (!lpInfo.locked) return 0;
   var score = Math.min(lpInfo.percentLocked || 0, 100) * 0.5;
   score += Math.min((lpInfo.lockDuration || 0) / 30, 1) * 50;
   return Math.round(score);
@@ -130,7 +133,7 @@ function calculateSurvivalScore(tokenData) {
   var signalChecks = [
     { signal: 'mintAuthority',       w: WEIGHTS.mintAuthority,          measured: breakdown.mintAuthority !== null && breakdown.mintAuthority !== undefined,                              reason: 'MINT_INFO_UNAVAILABLE' },
     { signal: 'freezeAuthority',     w: WEIGHTS.freezeAuthority,        measured: typeof tokenData.freezeAuthorityRevoked === 'boolean',                            reason: 'MINT_INFO_UNAVAILABLE' },
-    { signal: 'lpLocked',            w: WEIGHTS.lpLocked,               measured: !!tokenData.lpInfo,                                                               reason: 'LP_DATA_UNAVAILABLE' },
+    { signal: 'lpLocked',            w: WEIGHTS.lpLocked,               measured: breakdown.lpLocked !== null && breakdown.lpLocked !== undefined,                                                               reason: 'LP_DATA_UNAVAILABLE' },
     { signal: 'holderConcentration', w: WEIGHTS.topHolderConcentration, measured: typeof tokenData.top10HolderPercent === 'number',                                 reason: tokenData.holderNote || 'HOLDER_DATA_UNAVAILABLE' },
     { signal: 'devWalletActivity',   w: WEIGHTS.devWalletActivity,      measured: !!tokenData.devActivity,                                                          reason: 'DEV_ACTIVITY_NOT_COLLECTED' },
     { signal: 'tokenAge',            w: WEIGHTS.tokenAge,               measured: typeof tokenData.ageInHours === 'number' && tokenData.ageInHours > 0,             reason: 'NO_MARKET_HISTORY' },
@@ -196,7 +199,7 @@ function getConfidence(tokenData) {
 // =========================================================
 
 const ENGINE = "survivor.oracle";
-const SCORING_VERSION = "0.4.4";
+const SCORING_VERSION = "0.4.5";
 const MODEL_VERSION = "scoring-v3";
 
 const CONTRIBUTION_BUCKETS = [0.10, 0.15, 0.20, 0.25, 0.30];

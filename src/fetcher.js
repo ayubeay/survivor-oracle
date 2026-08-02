@@ -280,7 +280,7 @@ async function fetchTokenData(mintAddress) {
     pairCount: dexData && dexData.pairCount || null,
     volume24h: dexData && dexData.volume24h || 0, ageInHours: ageInHours,
     createdAt: dexData && dexData.createdAt,
-    lpInfo: { locked: false, lockDuration: 0, percentLocked: 0 },
+    lpInfo: null,   // not measured - no LP lock data source is wired in
     devActivity: null, fetchedAt: new Date().toISOString(), megacap: null,
   };
 }
