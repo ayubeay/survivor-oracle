@@ -31,7 +31,38 @@ ran at all.
 The locker count also does not match markets with positive lock: BONK has 10 lockers
 against 28 markets reporting lpLockedPct > 0. Different things are being counted.
 
-## Working interpretation
+## RESOLVED 2026-08-02: lpLocked measures BURNED LP, not escrowed LP
+
+Verified directly on-chain against WIF's largest "locked" pool
+(EP2ib6dYdEeqD8MfE2ezHCxX3kP3K2eLKkirfPm5eyMx, raydium, lpMint
+CQurpF3WS3yEqFEt1Bu8s5zmZqznQG3EJkcYvsyg3sLc).
+
+    rugcheck lpTotalSupply   3,102,901,079,517
+    rugcheck lpLocked        3,092,351,215,846   (99.66%)
+    difference                  10,549,863,671
+    actual on-chain supply      10,548,813,355   <- matches the difference to 0.01%
+
+So lpLocked = (LP ever minted) - (LP currently in circulation). It measures LP tokens that
+have been BURNED, not tokens held in escrow or under a time-lock.
+
+The earlier CLMM hypothesis was wrong. This is a classic Raydium AMM pool with fungible LP
+tokens, and its top holders are ordinary system-owned wallets, not lock programs. The
+lockers object with its system-address tokenAccounts and lockerScanStatus "none" is
+unrelated to the lpLocked figure.
+
+## Why this matters
+Burned LP is a genuine and strong property - it is irreversible in a way a time-lock is
+not. But it is a different property from what the field name implies, and it is not a
+lock. A caller told "94.7% locked" would reasonably infer an escrow arrangement with an
+unlock date. The correct statement is "94.7% of LP ever minted for this token's pools has
+been burned."
+
+It also explains the population pattern: burning LP is the memecoin launch convention,
+while protocol tokens and LSTs keep LP live for treasury and incentive management. The
+signal tracks launch ritual, which is what the 20-token sample showed before the mechanism
+was understood.
+
+## Superseded working interpretation
 lpLockedUSD most likely measures liquidity held in Raydium CLMM positions, where LP is
 NFT-represented rather than fungible and so does not appear as withdrawable supply. That
 is a venue property, not a commitment.
@@ -55,7 +86,13 @@ ownership rather than on escrow or time-lock contracts."
 
 ## Decision
 LP remains unmeasured in production scoring. The source passed the aggregation test and
-failed the meaning test. Restoring a 20-weight signal on a venue proxy would encode
+failed the meaning test - the number is real and correctly computed, but it measures
+burn, not lock.
+
+A future signal could legitimately use it as BURNED_LP_PERCENT with that name, since burn
+is verifiable and irreversible. It should not be weighted as a universal safety signal,
+because burning LP is a convention of one asset class rather than a property that
+distinguishes safe assets from dangerous ones - SLERF burned 99.97% of its LP. Restoring a 20-weight signal on a venue proxy would encode
 "trades on Raydium CLMM" as a safety property.
 
 Possible future states, only the first two justifying strong credit:
