@@ -96,6 +96,8 @@ app.get('/score/:mint', async function (req, res) {
           meta: buildMeta(cr._tokenData || {}, cReasons),
           name: cr.name, symbol: cr.symbol, riskLevel: cr.riskLevel, cached: true,
           signals: cr.signals ?? null,
+          coverage: cr.coverage ?? null,
+          score_basis: cr.score_basis || ((cr._tokenData && cr._tokenData.megacap) ? 'curated' : 'computed'),
         });
       }
       return res.json(cached.data);
@@ -117,7 +119,11 @@ app.get('/score/:mint', async function (req, res) {
       meta: meta,
       riskLevel: result.riskLevel,
       breakdown: result.breakdown,
-      coverage: result.coverage,
+      /* Coverage is only meaningful for computed scores. A curated megacap score is
+         assigned, not derived from signals, so 0% coverage would mean "no signals were
+         needed" - not "we measured nothing". Those must not collapse into one number. */
+      score_basis: tokenData.megacap ? 'curated' : 'computed',
+      coverage: tokenData.megacap ? null : result.coverage,
       holderNote: tokenData.holderNote, liquidityUsd: tokenData.liquidityUsd,
       ageInHours: tokenData.ageInHours, timestamp: result.timestamp,
       signals: {

@@ -23,7 +23,7 @@ const IRREVERSIBLE_KINDS = new Set(['bridge', 'lp_remove', 'lp_add']);
  * @param {string} args.kind         swap | lp_add | lp_remove | bridge | limit
  * @returns {SurvivorPolicy}
  */
-function buildPolicy({ score, risk_tier, confidence, reasons = [], kind = 'swap', coverage = null, notional_usd = 0 }) {
+function buildPolicy({ score, risk_tier, confidence, reasons = [], kind = 'swap', coverage = null, notional_usd = 0, score_basis = 'unknown' }) {
   const now = Math.floor(Date.now() / 1000);
   const expiresAt = now + 300; // policy valid for 5 minutes
 
@@ -95,12 +95,13 @@ function buildPolicy({ score, risk_tier, confidence, reasons = [], kind = 'swap'
 
   // Coverage cap - SHADOW ONLY. Computed and reported, never applied to policy.decision.
   // Promotion to enforcement happens only after harness validation of gate migrations.
-  const shadow = coverageCap(policy.decision, coverage, notional_usd);
+  const shadow = coverageCap(policy.decision, coverage, notional_usd, score_basis);
   policy.shadow_coverage_policy = {
     policy_version: COVERAGE_CAP_POLICY,
     live_decision: policy.decision,
     shadow_decision: shadow.decision,
     would_change: shadow.capped,
+    score_basis: score_basis,
     coverage_percent: shadow.coverage_percent ?? null,
     reason: shadow.reason,
     unmeasured: shadow.unmeasured || [],
@@ -116,10 +117,20 @@ function buildPolicy({ score, risk_tier, confidence, reasons = [], kind = 'swap'
    same permission as the identical score measured on full coverage. */
 const COVERAGE_CAP_POLICY = 'coverage-cap-v0.5.1-shadow';
 
-function coverageCap(decision, coverage, notionalUsd) {
+function coverageCap(decision, coverage, notionalUsd, scoreBasis) {
+  // A curated score is not evidence-derived, so evidence coverage cannot constrain it.
+  if (scoreBasis === 'curated') {
+    return { decision, capped: false, reason: 'COVERAGE_NOT_APPLICABLE_TO_CURATED_SCORE',
+             coverage_percent: null };
+  }
   const pct = coverage && typeof coverage.weight_coverage_percent === 'number'
     ? coverage.weight_coverage_percent : null;
-  if (pct === null) return { decision, capped: false, reason: 'COVERAGE_UNKNOWN' };
+  if (pct === null) {
+    // A computed score arriving without coverage is a pipeline defect, not thin evidence.
+    return { decision, capped: false,
+             reason: scoreBasis === 'computed' ? 'COVERAGE_MISSING_FOR_COMPUTED_SCORE' : 'COVERAGE_UNKNOWN',
+             coverage_percent: null };
+  }
 
   const rank = { DENY: 0, READ_ONLY: 1, THROTTLE: 2, ALLOW: 3 };
   let ceiling = 'ALLOW', reason = null;

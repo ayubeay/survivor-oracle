@@ -71,6 +71,7 @@ async function fetchSurvivorScore(mint) {
       confidence: Number(data.confidence ?? 0.5),
       reasons:   Array.isArray(data.reasons) ? data.reasons : [],
       coverage:  data.coverage || null,
+      score_basis: data.score_basis || 'unknown',
       evidence_band: data.evidence_band || null,
       oracle_meta: {
         mint:   data.mint,
@@ -119,7 +120,7 @@ async function handleGate(req, res) {
   const policy = buildPolicy({
     score: scoreData.score, risk_tier: scoreData.risk_tier,
     confidence: scoreData.confidence, reasons: scoreData.reasons, kind: intent.kind,
-    coverage: scoreData.coverage, notional_usd: intent.notional_usd,
+    coverage: scoreData.coverage, notional_usd: intent.notional_usd, score_basis: scoreData.score_basis,
   });
 
   const decision = enforce(intent, policy);
