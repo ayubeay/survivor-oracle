@@ -23,7 +23,7 @@ const IRREVERSIBLE_KINDS = new Set(['bridge', 'lp_remove', 'lp_add']);
  * @param {string} args.kind         swap | lp_add | lp_remove | bridge | limit
  * @returns {SurvivorPolicy}
  */
-function buildPolicy({ score, risk_tier, confidence, reasons = [], kind = 'swap' }) {
+function buildPolicy({ score, risk_tier, confidence, reasons = [], kind = 'swap', coverage = null, notional_usd = 0 }) {
   const now = Math.floor(Date.now() / 1000);
   const expiresAt = now + 300; // policy valid for 5 minutes
 
@@ -93,7 +93,50 @@ function buildPolicy({ score, risk_tier, confidence, reasons = [], kind = 'swap'
     policy = applyIrreversibilityHardening(policy, kind);
   }
 
+  // Coverage cap - SHADOW ONLY. Computed and reported, never applied to policy.decision.
+  // Promotion to enforcement happens only after harness validation of gate migrations.
+  const shadow = coverageCap(policy.decision, coverage, notional_usd);
+  policy.shadow_coverage_policy = {
+    policy_version: COVERAGE_CAP_POLICY,
+    live_decision: policy.decision,
+    shadow_decision: shadow.decision,
+    would_change: shadow.capped,
+    coverage_percent: shadow.coverage_percent ?? null,
+    reason: shadow.reason,
+    unmeasured: shadow.unmeasured || [],
+    notional_usd: notional_usd || 0,
+  };
+
   return policy;
+}
+
+/* Coverage cap - constitution v0.5.1, SHADOW ONLY.
+   Coverage constrains permission; it never grants it. A downgrade-only mapping, matching
+   applyIrreversibilityHardening. Evidence measured on thin coverage should not buy the
+   same permission as the identical score measured on full coverage. */
+const COVERAGE_CAP_POLICY = 'coverage-cap-v0.5.1-shadow';
+
+function coverageCap(decision, coverage, notionalUsd) {
+  const pct = coverage && typeof coverage.weight_coverage_percent === 'number'
+    ? coverage.weight_coverage_percent : null;
+  if (pct === null) return { decision, capped: false, reason: 'COVERAGE_UNKNOWN' };
+
+  const rank = { DENY: 0, READ_ONLY: 1, THROTTLE: 2, ALLOW: 3 };
+  let ceiling = 'ALLOW', reason = null;
+
+  if (pct < 50) {
+    ceiling = (notionalUsd || 0) > 100 ? 'DENY' : 'READ_ONLY';
+    reason = 'COVERAGE_BELOW_50';
+  } else if (pct < 70) {
+    ceiling = 'THROTTLE';
+    reason = 'COVERAGE_BELOW_70';
+  }
+
+  if (rank[decision] > rank[ceiling]) {
+    const unmeasured = (coverage.unmeasured || []).map(u => u.reason || u.signal);
+    return { decision: ceiling, capped: true, reason, coverage_percent: pct, unmeasured };
+  }
+  return { decision, capped: false, reason: null, coverage_percent: pct };
 }
 
 function applyIrreversibilityHardening(policy, kind) {
@@ -124,4 +167,4 @@ function applyIrreversibilityHardening(policy, kind) {
   return escalations[policy.decision] ? escalations[policy.decision]() : policy;
 }
 
-module.exports = { buildPolicy };
+module.exports = { buildPolicy, coverageCap, COVERAGE_CAP_POLICY };

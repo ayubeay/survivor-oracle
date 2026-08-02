@@ -70,6 +70,8 @@ async function fetchSurvivorScore(mint) {
       risk_tier: String(data.risk_tier ?? 'VERY_HIGH'),
       confidence: Number(data.confidence ?? 0.5),
       reasons:   Array.isArray(data.reasons) ? data.reasons : [],
+      coverage:  data.coverage || null,
+      evidence_band: data.evidence_band || null,
       oracle_meta: {
         mint:   data.mint,
         name:   data.name,
@@ -117,6 +119,7 @@ async function handleGate(req, res) {
   const policy = buildPolicy({
     score: scoreData.score, risk_tier: scoreData.risk_tier,
     confidence: scoreData.confidence, reasons: scoreData.reasons, kind: intent.kind,
+    coverage: scoreData.coverage, notional_usd: intent.notional_usd,
   });
 
   const decision = enforce(intent, policy);
@@ -258,7 +261,7 @@ async function handlePolicyDebug(req, res) {
 
   try {
     const scoreData = await fetchSurvivorScore(mint);
-    const policy = buildPolicy({ ...scoreData, kind });
+    const policy = buildPolicy({ ...scoreData, kind, notional_usd: Number(body.notional_usd || 0) });
     return jsonResponse(res, 200, { mint, kind, score: scoreData, policy });
   } catch (err) {
     return jsonResponse(res, 500, { error: err.message });
