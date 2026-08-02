@@ -70,10 +70,16 @@ dev activity, LP lock, and hardcoded metadata each did.
     - does adding it move band boundaries?
 
 ## 8. Implementation stages
-    0.5.0  rename risk_score to evidence_score with legacy field; rename tiers to
-           evidence bands; recalibrate band boundaries against the 20-token sample;
-           emit coverage.measured and coverage.unavailable with reasons.
-           No confidence object. No not_applicable. No gate change.
+    0.5.0  SHIPPED 2026-08-02. evidence_score and evidence_band emitted ALONGSIDE
+           risk_score, risk_tier and riskLevel - additive, not a rename, because Gate
+           (survivor-oracle-production-1501) and the x402 wrapper both read the legacy
+           fields. Boundaries deliberately NOT recalibrated: the current distribution is
+           compressed by the unresolved LP hole, so fitting bands to it would encode a
+           temporary defect into permanent labels. Schema tagged
+           evidence-band-v0.5-provisional. No score moved. Coverage arrays already emit
+           measured counts and unmeasured with reasons.
+           Legacy fields stay populated until consumers migrate; deprecation is a doc
+           statement, not a response-shape change.
     0.5.1  gate becomes a function of evidence + coverage rather than a score threshold,
            validated against the harness for gate migrations.
     0.5.2  confidence, once something real computes it.
