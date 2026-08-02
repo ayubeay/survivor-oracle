@@ -264,6 +264,21 @@ function getConfidenceFloat(tokenData) {
   return Math.round(Math.max(0.20, conf) * 100) / 100;
 }
 
+/* Evidence bands - constitution v0.5. Same numeric boundaries as the risk tiers they
+   sit alongside; only the naming changed. Boundaries stay provisional until the
+   denominator question is settled, because bands and denominators cannot be chosen
+   independently. */
+const EVIDENCE_BAND_SCHEMA = 'evidence-band-v0.5-provisional';
+
+function evidenceBand(score) {
+  if (typeof score !== 'number') return 'UNKNOWN';
+  if (score >= 75) return 'STRONGLY_FAVORABLE';
+  if (score >= 60) return 'MIXED_FAVORABLE';
+  if (score >= 50) return 'MIXED';
+  if (score >= 40) return 'ADVERSE';
+  return 'STRONGLY_ADVERSE';
+}
+
 function normalizeRiskTier(riskLevel) {
   switch ((riskLevel || "").toUpperCase()) {
     case "LOW": return "LOW";
@@ -305,4 +320,4 @@ function buildFeatureSnapshot(breakdown, tokenData) {
   return { age_bucket: ageBucket(tokenData.ageInHours), liquidity_bucket: liquidityBucket(tokenData.liquidityUsd), holder_bucket: holderBucket(breakdown.holderConcentration) };
 }
 
-module.exports = { AUTHORITY_DOCTRINE_VERSION, calculateSurvivalScore, generateReasons, getConfidence, WEIGHTS, ENGINE, SCORING_VERSION, MODEL_VERSION, buildStructuredReasons, getConfidenceFloat, buildMeta, buildFeatureSnapshot, normalizeRiskTier };
+module.exports = { AUTHORITY_DOCTRINE_VERSION, EVIDENCE_BAND_SCHEMA, evidenceBand, calculateSurvivalScore, generateReasons, getConfidence, WEIGHTS, ENGINE, SCORING_VERSION, MODEL_VERSION, buildStructuredReasons, getConfidenceFloat, buildMeta, buildFeatureSnapshot, normalizeRiskTier };

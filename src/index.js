@@ -9,7 +9,7 @@ require("dotenv").config();
 const express = require('express');
 var { initBilling } = require("./billing");
 const { fetchTokenData } = require('./fetcher');
-const { calculateSurvivalScore, generateReasons, getConfidence, WEIGHTS, ENGINE, SCORING_VERSION, MODEL_VERSION, buildStructuredReasons, getConfidenceFloat, buildMeta, buildFeatureSnapshot, normalizeRiskTier } = require('./scorer');
+const { calculateSurvivalScore, generateReasons, getConfidence, WEIGHTS, ENGINE, SCORING_VERSION, MODEL_VERSION, buildStructuredReasons, getConfidenceFloat, buildMeta, buildFeatureSnapshot, normalizeRiskTier, evidenceBand, EVIDENCE_BAND_SCHEMA } = require('./scorer');
 const { startMonitor, getRecentScores, getMonitorStats } = require('./monitor');
 const { startRescorer, getRescoreStats } = require("./rescorer");
 const { saveScore, getScoreHistory, getRecentScoresDB, getStats, getExtremes, getScoreDistribution, getHourlyActivity, getScoreHistoryPhase2 } = require('./database');
@@ -89,6 +89,8 @@ app.get('/score/:mint', async function (req, res) {
         return res.json({
           engine: ENGINE, chain: "solana", mint: mint,
           score: cr.score, risk_tier: normalizeRiskTier(cr.riskLevel), safe: cr.score >= 60,
+          evidence_score: cr.score, evidence_band: evidenceBand(cr.score),
+          evidence_band_schema: EVIDENCE_BAND_SCHEMA,
           confidence: getConfidenceFloat(cr._tokenData || {}),
           reasons: cReasons,
           meta: buildMeta(cr._tokenData || {}, cReasons),
@@ -108,6 +110,8 @@ app.get('/score/:mint', async function (req, res) {
       engine: ENGINE, chain: "solana",
       mint: mint, name: tokenData.name, symbol: tokenData.symbol,
       score: result.score, risk_tier: riskTier, safe: result.score >= 60,
+      evidence_score: result.score, evidence_band: evidenceBand(result.score),
+      evidence_band_schema: EVIDENCE_BAND_SCHEMA,
       confidence: confidenceFloat,
       reasons: structuredReasons,
       meta: meta,
