@@ -50,7 +50,23 @@ async function fetchRugCheck(mint) {
         if (typeof r === 'string') return r;
         return r.name || r.description || JSON.stringify(r);
       }).slice(0, 5) : [],
+      /* Verified on-chain 2026-08-02: this value is (LP ever minted - LP in circulation),
+         i.e. burned LP. It is not a time-lock and carries no unlock date. Checked against
+         WIF's largest pool: rugcheck total 3,102,901,079,517 minus locked
+         3,092,351,215,846 = 10,549,863,671, matching the actual LP mint supply of
+         10,548,813,355 to 0.01%. See docs/LP_SOURCE_SEMANTICS.md */
+      burned_lp_percent: data.lpLockedPct ?? null,
+      burned_lp_semantics: {
+        meaning: "Percentage of historical LP supply removed from circulation across recognized pools",
+        irreversible: true,
+        is_time_lock: false,
+        unlock_date_available: false,
+        source_field: "lpLockedPct",
+        caveat: "Burned LP closes one withdrawal route. It does not establish asset safety - SLERF burned 99.97% of its LP.",
+      },
+      // deprecated: the source's field name implies escrow. Retained for compatibility only.
       lp_locked_pct: data.lpLockedPct ?? null,
+      lp_locked_pct_deprecated: true,
     };
   } catch (err) {
     return { available: false, error: err.name === 'AbortError' ? 'timeout' : err.message };
