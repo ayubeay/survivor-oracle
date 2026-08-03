@@ -58,3 +58,44 @@ is the current one, not a guarantee.
 Probe a wider Token-2022 population to find defaultAccountState, nonTransferable, and
 interestBearingConfig in the wild, then define states from what actually appears rather
 than from the extension list in the spec.
+
+
+## Wider sweep (8 tokens) - the signal is transfer control, not Token-2022
+
+| token | program | bytes | controls |
+|---|---|---|---|
+| PYUSD | T22 | 866 | permanentDelegate, freezeAuthority, fee 0% latent, hook latent |
+| USDG | T22 | 866 | identical set, SAME KEY as PYUSD |
+| BERN | T22 | 278 | transfer fee 2.69% ACTIVE (was 4.2% at epoch 624) |
+| EURC | SPL | 82 | freezeAuthority only |
+| USDS | SPL | 82 | freezeAuthority only |
+| FDUSD | SPL | 82 | freezeAuthority only |
+| CHILLGUY | SPL | 82 | none |
+| GOAT | SPL | 82 | none |
+
+Not observed in this sample: defaultAccountState, nonTransferable, pausable,
+interestBearingConfig. The taxonomy should be built from what appears, not from the spec.
+
+### One key controls two stablecoins
+2apBGMsS6ti9RyF5TwQTDswXBWskiJP2LD4cUEDqYJjk is simultaneously the permanent delegate AND
+freeze authority for both PYUSD and USDG. Verified with full addresses, not truncated
+prefixes. Paxos issues both; this is their control model, not a defect. But a holder of
+either token is subject to unilateral transfer and freeze by that single key.
+
+### Design consequence
+The right signal is not "Token-2022 capabilities". It is transfer control: who can stop me
+selling, and how. Freeze authority is the most common answer and lives on classic SPL,
+where no extension is involved. Three of five classic-SPL tokens in this sample carry one.
+
+Proposed scope, spanning both programs:
+    freeze authority        both        who holds it, and is it a wallet, PDA, or multisig
+    permanent delegate      T22         who holds it
+    transfer fee            T22         current bps, authority, and whether active or latent
+    transfer hook           T22         active with programId, or latent with authority
+    default account state   T22         frozen would block transfers by default
+    non-transferable        T22         absolute
+    close authority         T22         who can close the mint
+
+### Related
+The existing freezeAuthority signal is a 10-weight boolean with no classification of the
+holder. The same treatment mint authority received in 0.4.4 applies here.
