@@ -94,7 +94,7 @@ async function classifyMintAuthority(mintAddress, mintAuthority) {
       };
     }
 
-    if (owner === TOKEN_PROGRAM && info && info.data.length === 355 && info.data[2] === 1) {
+    if ((owner === TOKEN_PROGRAM || owner === TOKEN_2022_PROGRAM) && info && info.data.length === 355 && info.data[2] === 1) {
       var m = info.data[0], n = info.data[1];
       var signers = [];
       for (var i = 0; i < n; i++) {
@@ -381,6 +381,7 @@ async function fetchTokenData(mintAddress) {
     name: sanitizeText(dexData && dexData.name || 'Unknown'),
     symbol: sanitizeText(dexData && dexData.symbol || 'UNKNOWN'),
     mintAuthorityRevoked: mintInfoResult.mintAuthorityRevoked,
+    mintAuthorityRaw: mintInfoResult.mintAuthorityRaw,
     mintAuthorityClass: mintAuthorityClass,
     transferControl: transferControl,
     freezeAuthorityRevoked: mintInfoResult.freezeAuthorityRevoked,
