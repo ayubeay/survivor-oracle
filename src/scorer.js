@@ -106,8 +106,10 @@ function calculateSurvivalScore(tokenData) {
       weights: WEIGHTS,
       shadow_denominator: { score: null, model_version: 'measured-evidence-v0.5.1-shadow',
                             enforced: false, reason: 'NOT_APPLICABLE_TO_CURATED_SCORE' },
-      shadow_transfer_control: { shadow_subscore: null, model_version: 'transfer-control-v0.5.3-shadow',
-                                 enforced: false, reason: 'NOT_APPLICABLE_TO_CURATED_SCORE' },
+      transfer_control_scoring: { transfer_control_subscore: null, model_version: 'transfer-control-v0.5.3',
+                                  enforced: true, reason: 'NOT_APPLICABLE_TO_CURATED_SCORE' },
+      shadow_transfer_control: { transfer_control_subscore: null, model_version: 'transfer-control-v0.5.3',
+                                 enforced: true, reason: 'NOT_APPLICABLE_TO_CURATED_SCORE' },
       coverage: { signals_expected: 7, signals_measured: 0, weight_coverage_percent: 0,
                   unmeasured: [], note: 'MEGACAP_MODE: score is assigned, not computed from signals' },
       timestamp: new Date().toISOString(),
@@ -116,7 +118,13 @@ function calculateSurvivalScore(tokenData) {
 
   var breakdown = {
     mintAuthority: scoreMintAuthority(tokenData.mintAuthorityRevoked, tokenData.mintAuthorityClass),
-    freezeAuthority: scoreFreezeAuthority(tokenData.freezeAuthorityRevoked),
+    /* v0.5.3: the freeze boolean is replaced by the transfer-control subscore in the same
+       10-point slot. Richer input, identical weight - not a promotion in importance.
+       Falls back to the boolean only when transfer control cannot be classified. */
+    freezeAuthority: (function () {
+      var t = shadowTransferControlScore(tokenData.transferControl);
+      return typeof t.score === 'number' ? t.score : scoreFreezeAuthority(tokenData.freezeAuthorityRevoked);
+    })(),
     lpLocked: scoreLpLocked(tokenData.lpInfo),
     holderConcentration: scoreHolderConcentration(tokenData.top10HolderPercent),
     devWalletActivity: scoreDevWalletActivity(tokenData.devActivity),
@@ -255,15 +263,16 @@ function shadowTransferControlScore(tc) {
   });
   var tcShadow = shadowTransferControlScore(tokenData.transferControl);
   var shadowTransferControl = {
-    model_version: 'transfer-control-v0.5.3-shadow',
-    enforced: false,
+    model_version: 'transfer-control-v0.5.3',
+    enforced: true,
     replaces: 'freezeAuthority',
     weight: WEIGHTS.freezeAuthority,
-    live_freeze_subscore: breakdown.freezeAuthority,
-    shadow_subscore: tcShadow.score,
+    transfer_control_subscore: tcShadow.score,
+    legacy_freeze_subscore: scoreFreezeAuthority(tokenData.freezeAuthorityRevoked),
+    fallback_used: typeof tcShadow.score !== 'number',
     reason: tcShadow.reason,
-    score_delta: (typeof tcShadow.score === 'number' && typeof breakdown.freezeAuthority === 'number')
-      ? Math.round(((tcShadow.score - breakdown.freezeAuthority) * WEIGHTS.freezeAuthority) / 100)
+    score_delta: typeof tcShadow.score === 'number'
+      ? Math.round(((tcShadow.score - scoreFreezeAuthority(tokenData.freezeAuthorityRevoked)) * WEIGHTS.freezeAuthority) / 100)
       : null,
   };
 
@@ -286,7 +295,9 @@ function shadowTransferControlScore(tc) {
 
   return { score: score, riskLevel: riskLevel, breakdown: breakdown, weights: WEIGHTS, coverage: coverage,
     shadow_denominator: shadowDenominator,
-    shadow_transfer_control: shadowTransferControl, timestamp: new Date().toISOString() };
+    transfer_control_scoring: shadowTransferControl,
+    shadow_transfer_control: shadowTransferControl,
+    timestamp: new Date().toISOString() };
 }
 
 function generateReasons(tokenData, breakdown) {
@@ -327,7 +338,7 @@ function getConfidence(tokenData) {
 // =========================================================
 
 const ENGINE = "survivor.oracle";
-const SCORING_VERSION = "0.5.2";
+const SCORING_VERSION = "0.5.3";
 const MODEL_VERSION = "scoring-v3";
 
 const CONTRIBUTION_BUCKETS = [0.10, 0.15, 0.20, 0.25, 0.30];
