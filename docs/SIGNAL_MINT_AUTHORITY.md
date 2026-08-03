@@ -116,3 +116,27 @@ costly market analysis, but not cheap decision-relevant facts.
 
 These assets did not become safer. The scorer stopped treating a program-derived authority
 as equivalent to an anonymous keypair.
+
+
+## Bug found and fixed 2026-08-03 (0.5.2)
+Token-2022 multisig authorities were classified ON_CURVE_OTHER and therefore excluded from
+scoring entirely. The multisig branch checked only for the classic Token Program as account
+owner; a multisig owned by TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb fell through.
+
+Effect: every Token-2022 token with a multisig mint authority silently lost its 20-weight
+mint-authority signal. PYUSD scored 31 with 45% coverage; it now scores 40 with 65%.
+Also fixed: mintAuthorityRaw was computed in getTokenMintInfo but never propagated to
+fetchTokenData output.
+
+Verified against raw account bytes rather than the decoder alone: data[0]=1, data[1]=4
+matches the reported 1-of-4.
+
+Shipped in 0.4.4, invisible for three days because the entire test sample was classic SPL.
+It surfaced only when the transfer-control probe introduced Token-2022 tokens.
+
+### Doctrine question raised
+PYUSD is 1-of-4: any single one of four signers can mint unilaterally. The formula scores
+it 46 (35 + 25*(1/4) + 5*1), correctly placing it between a wallet and a real quorum. But
+the formula was written before a 1-of-n was observed in the wild, and a 46-point gap
+between 1-of-4 and a single wallet may overstate the practical difference. Worth revisiting
+once more thresholds are observed.
