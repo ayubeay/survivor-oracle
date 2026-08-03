@@ -77,6 +77,21 @@ app.get('/health', function (req, res) {
   });
 });
 
+/* Single source for the evidence-layer fields. Both the cached and fresh response
+   builders spread this, so a field added here cannot silently vanish from one path -
+   which has now happened four times (signals, coverage, shadow_denominator, score_basis). */
+function evidenceFields(scoreObj, tokenData) {
+  var isCurated = !!(tokenData && tokenData.megacap);
+  return {
+    evidence_score: scoreObj.score,
+    evidence_band: evidenceBand(scoreObj.score),
+    evidence_band_schema: EVIDENCE_BAND_SCHEMA,
+    score_basis: isCurated ? 'curated' : 'computed',
+    coverage: isCurated ? null : (scoreObj.coverage ?? null),
+    shadow_denominator: scoreObj.shadow_denominator ?? null,
+  };
+}
+
 app.get('/score/:mint', async function (req, res) {
   try {
     var mint = req.params.mint;
@@ -89,15 +104,12 @@ app.get('/score/:mint', async function (req, res) {
         return res.json({
           engine: ENGINE, chain: "solana", mint: mint,
           score: cr.score, risk_tier: normalizeRiskTier(cr.riskLevel), safe: cr.score >= 60,
-          evidence_score: cr.score, evidence_band: evidenceBand(cr.score),
-          evidence_band_schema: EVIDENCE_BAND_SCHEMA,
+          ...evidenceFields(cr, cr._tokenData || {}),
           confidence: getConfidenceFloat(cr._tokenData || {}),
           reasons: cReasons,
           meta: buildMeta(cr._tokenData || {}, cReasons),
           name: cr.name, symbol: cr.symbol, riskLevel: cr.riskLevel, cached: true,
           signals: cr.signals ?? null,
-          coverage: cr.coverage ?? null,
-          shadow_denominator: cr.shadow_denominator ?? null,
           score_basis: cr.score_basis || ((cr._tokenData && cr._tokenData.megacap) ? 'curated' : 'computed'),
         });
       }
@@ -113,19 +125,12 @@ app.get('/score/:mint', async function (req, res) {
       engine: ENGINE, chain: "solana",
       mint: mint, name: tokenData.name, symbol: tokenData.symbol,
       score: result.score, risk_tier: riskTier, safe: result.score >= 60,
-      evidence_score: result.score, evidence_band: evidenceBand(result.score),
-      evidence_band_schema: EVIDENCE_BAND_SCHEMA,
+      ...evidenceFields(result, tokenData),
       confidence: confidenceFloat,
       reasons: structuredReasons,
       meta: meta,
       riskLevel: result.riskLevel,
       breakdown: result.breakdown,
-      /* Coverage is only meaningful for computed scores. A curated megacap score is
-         assigned, not derived from signals, so 0% coverage would mean "no signals were
-         needed" - not "we measured nothing". Those must not collapse into one number. */
-      score_basis: tokenData.megacap ? 'curated' : 'computed',
-      coverage: tokenData.megacap ? null : result.coverage,
-      shadow_denominator: result.shadow_denominator ?? null,
       holderNote: tokenData.holderNote, liquidityUsd: tokenData.liquidityUsd,
       ageInHours: tokenData.ageInHours, timestamp: result.timestamp,
       signals: {
