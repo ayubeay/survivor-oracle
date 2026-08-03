@@ -44,6 +44,7 @@ for (const [name, mint] of TOKENS) {
       freezeClass: freeze ? freeze.authority_class : null,
       otherControls: others.map(c => c.type + ":" + c.status),
       activeConstraints: cs.filter(c => c.status === "ACTIVE_CONSTRAINT").map(c => c.type),
+      shadowTC: r.shadow_transfer_control || {},
       latent: cs.filter(c => c.status === "PRESENT_LATENT" || c.status === "PRESENT_INACTIVE").map(c => c.type),
     });
   } catch (e) { rows.push({ name, error: e.message.slice(0, 50) }); }
@@ -55,7 +56,10 @@ for (const r of rows) {
   if (r.error) { console.log(r.name.padEnd(9), "ERROR", r.error); continue; }
   console.log(r.name.padEnd(9) + String(r.score).padStart(6) + "  " +
     String(r.program).padEnd(12) + String(r.state).padEnd(15) +
-    String(r.freezeClass || "-").padEnd(16) + (r.otherControls.join(" ") || "-"));
+    String(r.freezeClass || "-").padEnd(14) +
+    "live " + String(r.shadowTC.live_freeze_subscore).padStart(4) +
+    " shadow " + String(r.shadowTC.shadow_subscore).padStart(4) +
+    " delta " + String(r.shadowTC.score_delta).padStart(4) + "  " + String(r.shadowTC.reason || "").slice(0, 40));
 }
 
 const ok = rows.filter(r => !r.error);

@@ -106,6 +106,8 @@ function calculateSurvivalScore(tokenData) {
       weights: WEIGHTS,
       shadow_denominator: { score: null, model_version: 'measured-evidence-v0.5.1-shadow',
                             enforced: false, reason: 'NOT_APPLICABLE_TO_CURATED_SCORE' },
+      shadow_transfer_control: { shadow_subscore: null, model_version: 'transfer-control-v0.5.3-shadow',
+                                 enforced: false, reason: 'NOT_APPLICABLE_TO_CURATED_SCORE' },
       coverage: { signals_expected: 7, signals_measured: 0, weight_coverage_percent: 0,
                   unmeasured: [], note: 'MEGACAP_MODE: score is assigned, not computed from signals' },
       timestamp: new Date().toISOString(),
@@ -152,7 +154,77 @@ function calculateSurvivalScore(tokenData) {
     note: 'reported only; unmeasured signals still contribute their neutral default to the score in this version',
   };
 
-  /* Shadow denominator - constitution v0.5.1, OBSERVATIONAL ONLY.
+  /* Transfer control shadow - v0.5.3, OBSERVATIONAL ONLY.
+   A candidate replacement for the freezeAuthority boolean at its existing 10 weight.
+   Scores holder freedom: what can restrict, redirect, tax or disable a transfer, and how
+   concentrated is the power to do so. Disclosure does not earn credit - a documented
+   freeze authority is still a freeze authority. */
+function shadowTransferControlScore(tc) {
+  if (!tc || !tc.state || tc.state === 'UNRESOLVED') {
+    return { score: null, reason: 'TRANSFER_CONTROL_UNRESOLVED' };
+  }
+  var controls = tc.controls || [];
+  var reasons = [];
+
+  if (tc.state === 'NON_TRANSFERABLE') return { score: 0, reason: 'NON_TRANSFERABLE' };
+
+  var fee = controls.find(function (c) { return c.type === 'TRANSFER_FEE' && c.status === 'ACTIVE_CONSTRAINT'; });
+  var hook = controls.find(function (c) { return c.type === 'TRANSFER_HOOK' && c.status === 'ACTIVE_CONSTRAINT'; });
+  var frozen = controls.find(function (c) { return c.type === 'DEFAULT_ACCOUNT_STATE' && c.status === 'ACTIVE_CONSTRAINT'; });
+
+  if (hook || frozen) {
+    reasons.push(hook ? 'ACTIVE_TRANSFER_HOOK' : 'DEFAULT_ACCOUNTS_FROZEN');
+    return { score: 20, reason: reasons.join(','), controls: controls.length };
+  }
+
+  if (fee) {
+    // decline progressively with fee severity: 0.5% -> 78, 2.69% -> 47, 10%+ -> 10
+    var bps = fee.current_basis_points || 0;
+    var s = Math.max(10, Math.round(85 - Math.min(bps, 1000) / 1000 * 75));
+    reasons.push('ACTIVE_TRANSFER_FEE_' + bps + 'BPS');
+    return { score: s, reason: reasons.join(','), fee_bps: bps };
+  }
+
+  if (tc.state === 'UNCONTROLLED') return { score: 100, reason: 'NO_TRANSFER_CONTROL_OBSERVED' };
+
+  // CONTROLLED: score by how concentrated the controlling authority is.
+  // Take the weakest (most concentrated) authority among the active capabilities.
+  var rank = { MULTISIG: 3, PROGRAM_DERIVED: 2, WALLET: 1 };
+  var worst = null, worstClass = null;
+  controls.forEach(function (c) {
+    if (c.status !== 'ACTIVE_CAPABILITY' || !c.authority_class) return;
+    var r = rank[c.authority_class] || 0;
+    if (worst === null || r < worst) { worst = r; worstClass = c.authority_class; }
+  });
+
+  var base;
+  if (worstClass === 'MULTISIG') {
+    var m = 1, n = 1;
+    controls.forEach(function (c) { if (c.authority_class === 'MULTISIG' && c.signers_n) { m = c.threshold_m || 1; n = c.signers_n; } });
+    // a 1-of-n is not a quorum; scale with the threshold ratio
+    base = Math.round(45 + 25 * (m / n));
+    reasons.push('MULTISIG_' + m + '_OF_' + n);
+  } else if (worstClass === 'PROGRAM_DERIVED') {
+    base = 60; reasons.push('PROGRAM_DERIVED_AUTHORITY');
+  } else if (worstClass === 'WALLET') {
+    base = 35; reasons.push('SINGLE_WALLET_AUTHORITY');
+  } else {
+    return { score: null, reason: 'AUTHORITY_CLASS_UNRESOLVED' };
+  }
+
+  // seizure power is strictly worse than freeze power
+  if (controls.some(function (c) { return c.type === 'PERMANENT_DELEGATE'; })) {
+    base = Math.max(10, base - 15);
+    reasons.push('PERMANENT_DELEGATE');
+  }
+  // latent capability is disclosed, not penalised - recorded only
+  var latent = controls.filter(function (c) { return c.status === 'PRESENT_LATENT' || c.status === 'PRESENT_INACTIVE'; });
+  if (latent.length) reasons.push('LATENT:' + latent.map(function (c) { return c.type; }).join('+'));
+
+  return { score: base, reason: reasons.join(','), controls: controls.length };
+}
+
+/* Shadow denominator - constitution v0.5.1, OBSERVATIONAL ONLY.
      Recomputes the evidence score over signals that are both measured and valid, with the
      denominator reduced accordingly. Never affects score, band, or gate.
        lpLocked          measures burned LP, a launch convention rather than a universal
@@ -181,6 +253,20 @@ function calculateSurvivalScore(tokenData) {
     shadowWeight += c.w;
     shadowWeighted += sub * c.w;
   });
+  var tcShadow = shadowTransferControlScore(tokenData.transferControl);
+  var shadowTransferControl = {
+    model_version: 'transfer-control-v0.5.3-shadow',
+    enforced: false,
+    replaces: 'freezeAuthority',
+    weight: WEIGHTS.freezeAuthority,
+    live_freeze_subscore: breakdown.freezeAuthority,
+    shadow_subscore: tcShadow.score,
+    reason: tcShadow.reason,
+    score_delta: (typeof tcShadow.score === 'number' && typeof breakdown.freezeAuthority === 'number')
+      ? Math.round(((tcShadow.score - breakdown.freezeAuthority) * WEIGHTS.freezeAuthority) / 100)
+      : null,
+  };
+
   var shadowDenominator = {
     score: shadowWeight > 0 ? Math.round(shadowWeighted / shadowWeight) : null,
     measured_weight: shadowWeight,
@@ -199,7 +285,8 @@ function calculateSurvivalScore(tokenData) {
   else riskLevel = 'EXTREME';
 
   return { score: score, riskLevel: riskLevel, breakdown: breakdown, weights: WEIGHTS, coverage: coverage,
-    shadow_denominator: shadowDenominator, timestamp: new Date().toISOString() };
+    shadow_denominator: shadowDenominator,
+    shadow_transfer_control: shadowTransferControl, timestamp: new Date().toISOString() };
 }
 
 function generateReasons(tokenData, breakdown) {
