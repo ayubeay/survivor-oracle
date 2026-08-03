@@ -99,3 +99,34 @@ Proposed scope, spanning both programs:
 ### Related
 The existing freezeAuthority signal is a 10-weight boolean with no classification of the
 holder. The same treatment mint authority received in 0.4.4 applies here.
+
+
+## Shipped 2026-08-02: Layer 1 transfer-control classifier (reporting only)
+
+Live in signals.transfer_control. No weight assigned, no score changed.
+
+States: UNCONTROLLED, CONTROLLED, RESTRICTED, NON_TRANSFERABLE, UNRESOLVED
+Per-control status: ABSENT, PRESENT_INACTIVE, PRESENT_LATENT, ACTIVE_CAPABILITY, ACTIVE_CONSTRAINT
+
+Regression set:
+| token | program | state | controls |
+|---|---|---|---|
+| BONK | CLASSIC_SPL | UNCONTROLLED | none |
+| USDC | CLASSIC_SPL | CONTROLLED | freeze authority, classified MULTISIG |
+| PYUSD | TOKEN_2022 | CONTROLLED | freeze, close, permanent delegate, fee inactive, hook latent |
+| BERN | TOKEN_2022 | RESTRICTED | transfer fee 2.69% ACTIVE_CONSTRAINT |
+
+Authority classification is reused from the mint-authority work rather than duplicated, so
+a freeze authority reports WALLET, PROGRAM_DERIVED or MULTISIG on the same taxonomy.
+
+### The case for eventually weighting it
+BERN and BONK both score 67. BERN taxes 2.69% on every transfer; BONK has no control that
+can restrict a holder at all. The current model cannot tell them apart. This signal can,
+and it discriminates across the population in a way LP lock did not.
+
+### Doctrine held
+- capability is not abuse: a permanent delegate is a disclosed power, not evidence of intent
+- present is not active: PYUSD carries a fee extension at 0% and a hook with no program
+- Layer 1 cannot say who holds an address. The same authority address being configured for
+  PYUSD and USDG is an on-chain fact; whether one party, a custodian, or a quorum service
+  controls it is Layer 2.
