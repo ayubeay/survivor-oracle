@@ -23,7 +23,7 @@ const IRREVERSIBLE_KINDS = new Set(['bridge', 'lp_remove', 'lp_add']);
  * @param {string} args.kind         swap | lp_add | lp_remove | bridge | limit
  * @returns {SurvivorPolicy}
  */
-function buildPolicy({ score, risk_tier, confidence, reasons = [], kind = 'swap', coverage = null, notional_usd = 0, score_basis = 'unknown' }) {
+function buildPolicy({ score, risk_tier, confidence, reasons = [], kind = 'swap', coverage = null, notional_usd = 0, score_basis = 'unknown', transfer_control = null }) {
   const now = Math.floor(Date.now() / 1000);
   const expiresAt = now + 300; // policy valid for 5 minutes
 
@@ -95,6 +95,17 @@ function buildPolicy({ score, risk_tier, confidence, reasons = [], kind = 'swap'
 
   // Coverage cap - SHADOW ONLY. Computed and reported, never applied to policy.decision.
   // Promotion to enforcement happens only after harness validation of gate migrations.
+  const exec = executionConstraints(transfer_control, notional_usd);
+  policy.shadow_execution_constraints = {
+    policy_version: EXECUTION_CONSTRAINT_POLICY,
+    enforced: false,
+    live_decision: policy.decision,
+    suggested_decision: exec.decision,
+    would_change: exec.decision !== null && exec.decision !== policy.decision,
+    reason: exec.reason,
+    disclosures: exec.disclosures,
+  };
+
   const shadow = coverageCap(policy.decision, coverage, notional_usd, score_basis);
   policy.shadow_coverage_policy = {
     policy_version: COVERAGE_CAP_POLICY,
@@ -150,6 +161,61 @@ function coverageCap(decision, coverage, notionalUsd, scoreBasis) {
   return { decision, capped: false, reason: null, coverage_percent: pct };
 }
 
+/* Active transfer constraints as an EXECUTION concern, not an evidence one - v0.5.3 shadow.
+   A 2.69% transfer fee is a known transaction cost, not a probabilistic risk. It belongs
+   beside slippage and route fees, computed against the actual notional. Boundaries are
+   provisional and shadowed. */
+const EXECUTION_CONSTRAINT_POLICY = 'execution-constraints-v0.5.3-shadow';
+
+function executionConstraints(transferControl, notionalUsd) {
+  if (!transferControl || !transferControl.state) {
+    return { decision: null, reason: 'TRANSFER_CONTROL_UNKNOWN', disclosures: [] };
+  }
+  var controls = transferControl.controls || [];
+  var disclosures = [], suggested = null, reasons = [];
+  var n = Number(notionalUsd) || 0;
+
+  controls.forEach(function (c) {
+    if (c.type === 'NON_TRANSFERABLE') {
+      suggested = 'DENY'; reasons.push('NON_TRANSFERABLE');
+    }
+    if (c.type === 'DEFAULT_ACCOUNT_STATE' && c.status === 'ACTIVE_CONSTRAINT') {
+      if (suggested !== 'DENY') suggested = 'READ_ONLY';
+      reasons.push('DEFAULT_ACCOUNTS_FROZEN');
+    }
+    if (c.type === 'TRANSFER_HOOK' && c.status === 'ACTIVE_CONSTRAINT') {
+      if (!suggested) suggested = 'THROTTLE';
+      reasons.push('ACTIVE_TRANSFER_HOOK_UNCLASSIFIED');
+      disclosures.push({ type: 'TRANSFER_HOOK', program_id: c.program_id,
+        note: 'A program runs on every transfer and may block it. Hook program not classified.' });
+    }
+    if (c.type === 'TRANSFER_FEE' && c.status === 'ACTIVE_CONSTRAINT') {
+      var bps = c.current_basis_points || 0;
+      var cost = Math.round(n * bps / 10000 * 100) / 100;
+      disclosures.push({ type: 'TRANSFER_FEE', basis_points: bps,
+        percent: bps / 100, estimated_cost_usd: cost,
+        estimated_received_usd: Math.round((n - cost) * 100) / 100,
+        authority: c.authority || null, mutable: c.mutable === true,
+        note: 'Charged on every transfer. The fee authority can change this value.' });
+      reasons.push('ACTIVE_TRANSFER_FEE_' + bps + 'BPS');
+      if (bps > 300 && !suggested) suggested = 'READ_ONLY';
+      else if (bps >= 100 && !suggested) suggested = 'THROTTLE';
+    }
+    if (c.type === 'PERMANENT_DELEGATE') {
+      disclosures.push({ type: 'PERMANENT_DELEGATE', authority: c.authority || null,
+        authority_class: c.authority_class || null,
+        note: 'This authority can transfer or burn from any holder account without consent. Disclosed capability, not evidence of misuse.' });
+    }
+    if (c.type === 'FREEZE_AUTHORITY') {
+      disclosures.push({ type: 'FREEZE_AUTHORITY', authority: c.authority || null,
+        authority_class: c.authority_class || null,
+        note: 'This authority can freeze token accounts, preventing transfer.' });
+    }
+  });
+
+  return { decision: suggested, reason: reasons.join(',') || null, disclosures: disclosures };
+}
+
 function applyIrreversibilityHardening(policy, kind) {
   const irreversibleReason = { code: 'IRREVERSIBLE_ACTION', severity: 'high' };
 
@@ -178,4 +244,4 @@ function applyIrreversibilityHardening(policy, kind) {
   return escalations[policy.decision] ? escalations[policy.decision]() : policy;
 }
 
-module.exports = { buildPolicy, coverageCap, COVERAGE_CAP_POLICY };
+module.exports = { buildPolicy, coverageCap, COVERAGE_CAP_POLICY, executionConstraints, EXECUTION_CONSTRAINT_POLICY };
