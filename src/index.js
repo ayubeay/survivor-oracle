@@ -97,6 +97,7 @@ app.get('/score/:mint', async function (req, res) {
           name: cr.name, symbol: cr.symbol, riskLevel: cr.riskLevel, cached: true,
           signals: cr.signals ?? null,
           coverage: cr.coverage ?? null,
+          shadow_denominator: cr.shadow_denominator ?? null,
           score_basis: cr.score_basis || ((cr._tokenData && cr._tokenData.megacap) ? 'curated' : 'computed'),
         });
       }
@@ -124,6 +125,7 @@ app.get('/score/:mint', async function (req, res) {
          needed" - not "we measured nothing". Those must not collapse into one number. */
       score_basis: tokenData.megacap ? 'curated' : 'computed',
       coverage: tokenData.megacap ? null : result.coverage,
+      shadow_denominator: result.shadow_denominator ?? null,
       holderNote: tokenData.holderNote, liquidityUsd: tokenData.liquidityUsd,
       ageInHours: tokenData.ageInHours, timestamp: result.timestamp,
       signals: {
