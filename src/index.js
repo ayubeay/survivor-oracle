@@ -136,6 +136,7 @@ app.get('/score/:mint', async function (req, res) {
       signals: {
         mint_authority_revoked: tokenData.mintAuthorityRevoked ?? null,
         mint_authority_class: tokenData.mintAuthorityClass ?? null,
+        transfer_control: tokenData.transferControl ?? null,
         freeze_authority_revoked: tokenData.freezeAuthorityRevoked ?? null,
         lp: tokenData.lpInfo ? {
           locked: !!tokenData.lpInfo.locked,

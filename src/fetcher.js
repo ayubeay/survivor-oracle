@@ -128,6 +128,116 @@ async function classifyMintAuthority(mintAddress, mintAuthority) {
   }
 }
 
+/* Layer 1 transfer-control classification. One question across both token programs:
+   what observable authority or capability can restrict, redirect, tax, or disable a
+   holder's transfer? Reports capabilities and who holds them. Does not infer intent -
+   a permanent delegate is a disclosed power, not evidence of misuse. */
+const TOKEN_2022_PROGRAM = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
+
+async function classifyAuthorityFor(addr) {
+  if (!addr) return null;
+  var c = await classifyMintAuthority(null, addr);
+  return {
+    authority: addr,
+    authority_class: c.state,
+    threshold_m: c.threshold_m,
+    signers_n: c.signers_n,
+  };
+}
+
+async function classifyTransferControl(mintAddress) {
+  try {
+    var pk = new PublicKey(mintAddress);
+    var raw = await connection.getAccountInfo(pk);
+    if (!raw) return { state: 'UNRESOLVED', reason: 'MINT_ACCOUNT_NOT_FOUND' };
+    var program = raw.owner.toBase58() === TOKEN_2022_PROGRAM ? 'TOKEN_2022' : 'CLASSIC_SPL';
+
+    var parsed = await connection.getParsedAccountInfo(pk);
+    var info = parsed.value && parsed.value.data && parsed.value.data.parsed
+      ? parsed.value.data.parsed.info : null;
+    if (!info) return { state: 'UNRESOLVED', program: program, reason: 'MINT_NOT_PARSEABLE' };
+
+    var controls = [];
+
+    if (info.freezeAuthority) {
+      var fa = await classifyAuthorityFor(info.freezeAuthority);
+      controls.push(Object.assign({ type: 'FREEZE_AUTHORITY', status: 'ACTIVE_CAPABILITY',
+        effect: 'Can freeze token accounts, preventing transfer' }, fa));
+    }
+
+    var exts = info.extensions || [];
+    for (var i = 0; i < exts.length; i++) {
+      var e = exts[i], s = e.state || {};
+      if (e.extension === 'permanentDelegate' && s.delegate) {
+        var pd = await classifyAuthorityFor(s.delegate);
+        controls.push(Object.assign({ type: 'PERMANENT_DELEGATE', status: 'ACTIVE_CAPABILITY',
+          effect: 'Can transfer or burn from any token account without holder consent' }, pd));
+      }
+      if (e.extension === 'transferFeeConfig') {
+        var bps = (s.newerTransferFee && s.newerTransferFee.transferFeeBasisPoints) || 0;
+        var fee = await classifyAuthorityFor(s.transferFeeConfigAuthority);
+        controls.push(Object.assign({
+          type: 'TRANSFER_FEE',
+          status: bps > 0 ? 'ACTIVE_CONSTRAINT' : 'PRESENT_INACTIVE',
+          current_basis_points: bps,
+          maximum_fee: (s.newerTransferFee && s.newerTransferFee.maximumFee) ?? null,
+          mutable: !!s.transferFeeConfigAuthority,
+          effect: bps > 0 ? 'Each transfer is taxed ' + (bps / 100) + '%'
+                          : 'Fee is zero but the authority can raise it',
+        }, fee));
+      }
+      if (e.extension === 'transferHook') {
+        var hk = await classifyAuthorityFor(s.authority);
+        controls.push(Object.assign({
+          type: 'TRANSFER_HOOK',
+          status: s.programId ? 'ACTIVE_CONSTRAINT' : 'PRESENT_LATENT',
+          program_id: s.programId || null,
+          effect: s.programId ? 'A program executes on every transfer and may block it'
+                              : 'No hook installed, but the authority can install one',
+        }, hk));
+      }
+      if (e.extension === 'defaultAccountState') {
+        controls.push({ type: 'DEFAULT_ACCOUNT_STATE',
+          status: s.accountState === 'frozen' ? 'ACTIVE_CONSTRAINT' : 'PRESENT_INACTIVE',
+          account_state: s.accountState || null,
+          effect: s.accountState === 'frozen'
+            ? 'New token accounts are frozen until explicitly thawed'
+            : 'New token accounts are created unfrozen' });
+      }
+      if (e.extension === 'nonTransferable') {
+        controls.push({ type: 'NON_TRANSFERABLE', status: 'ACTIVE_CONSTRAINT',
+          effect: 'Tokens cannot be transferred at all' });
+      }
+      if (e.extension === 'mintCloseAuthority' && s.closeAuthority) {
+        var ca = await classifyAuthorityFor(s.closeAuthority);
+        controls.push(Object.assign({ type: 'MINT_CLOSE_AUTHORITY', status: 'ACTIVE_CAPABILITY',
+          effect: 'Can close the mint account' }, ca));
+      }
+      if (e.extension === 'pausable') {
+        controls.push({ type: 'PAUSABLE', status: 'ACTIVE_CAPABILITY',
+          effect: 'Transfers can be paused', raw: s });
+      }
+    }
+
+    var state = 'UNCONTROLLED';
+    if (controls.some(function (c) { return c.type === 'NON_TRANSFERABLE'; })) state = 'NON_TRANSFERABLE';
+    else if (controls.some(function (c) { return c.status === 'ACTIVE_CONSTRAINT'; })) state = 'RESTRICTED';
+    else if (controls.length) state = 'CONTROLLED';
+
+    return {
+      program: program, state: state, controls: controls,
+      extensions_present: exts.map(function (e) { return e.extension; }),
+      limitations: [
+        'Capability does not imply misuse; these are disclosed powers, not evidence of intent',
+        'Whether an authority address is held by one party, a custodian, or a quorum service is not derivable at Layer 1',
+        'Transfer fees and hooks are mutable by their authority; values reported are current',
+      ],
+    };
+  } catch (err) {
+    return { state: 'UNRESOLVED', reason: 'CLASSIFICATION_FAILED: ' + err.message };
+  }
+}
+
 async function getHolderDistribution(mintAddress) {
   if (isMegacap(mintAddress)) {
     console.log('[SURVIVOR] Megacap denylist hit, skipping holder query');
@@ -231,10 +341,12 @@ async function fetchTokenData(mintAddress) {
     catch (e) { mintInfo = { mintAuthorityRevoked: false, freezeAuthorityRevoked: false, decimals: 0, supply: '0', mintAuthorityRaw: null }; }
     // the fast path may skip costly market analysis, but not cheap decision-relevant facts
     var megaAuthorityClass = await classifyMintAuthority(mintAddress, mintInfo.mintAuthorityRaw);
+    var megaTransferControl = await classifyTransferControl(mintAddress);
     return {
       address: mintAddress, name: mega.name, symbol: mega.symbol,
       mintAuthorityRevoked: mintInfo.mintAuthorityRevoked, freezeAuthorityRevoked: mintInfo.freezeAuthorityRevoked,
       mintAuthorityClass: megaAuthorityClass,
+      transferControl: megaTransferControl,
       decimals: mintInfo.decimals, supply: mintInfo.supply,
       totalHolders: null, top10HolderPercent: null, topHolders: [], holderNote: 'MEGACAP_SKIP',
       priceUsd: null, liquidityUsd: null, volume24h: null, ageInHours: null, createdAt: null,
@@ -247,6 +359,7 @@ async function fetchTokenData(mintAddress) {
   ]);
   var mintInfoResult = results[0]; var holders = results[1]; var dexData = results[2];
   var mintAuthorityClass = await classifyMintAuthority(mintAddress, mintInfoResult.mintAuthorityRaw);
+  var transferControl = await classifyTransferControl(mintAddress);
   // concentration relative to total supply, not to the sampled accounts
   var concentrationBasis = null;
   try {
@@ -269,6 +382,7 @@ async function fetchTokenData(mintAddress) {
     symbol: sanitizeText(dexData && dexData.symbol || 'UNKNOWN'),
     mintAuthorityRevoked: mintInfoResult.mintAuthorityRevoked,
     mintAuthorityClass: mintAuthorityClass,
+    transferControl: transferControl,
     freezeAuthorityRevoked: mintInfoResult.freezeAuthorityRevoked,
     decimals: mintInfoResult.decimals, supply: mintInfoResult.supply,
     totalHolders: holders.totalHolders, top10HolderPercent: holders.top10HolderPercent,
