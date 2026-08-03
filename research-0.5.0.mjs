@@ -63,8 +63,10 @@ for (const [name, mint] of TOKENS) {
     const evidence = mw > 0 ? Math.round(weighted / mw) : null;
     const capped = coverageCappedGate(evidence, cov);
 
+    const sd = r.shadow_denominator || {};
     rows.push({
       name, megacap: false,
+      shadow: sd.score, shadowWeight: sd.measured_weight,
       lp: d.lpInfo ? Math.round(d.lpInfo.percentLocked) + '%' : 'null',
       lpSub: b.lpLocked,
       ver: r.scoring_version || (r.meta && r.meta.scoring_version) || '?',
@@ -84,7 +86,9 @@ for (const r of rows) {
   if (r.error) { console.log(r.name.padEnd(9), "ERROR", r.error); continue; }
   if (r.megacap) { console.log(r.name.padEnd(9), "  -  | megacap, curated score " + r.fixed); continue; }
   console.log(
-    r.name.padEnd(9) + (r.cov + "%").padStart(5) + " lp:" + String(r.lp).padEnd(5) + "sub:" + String(r.lpSub).padStart(3) + " | " +
+    r.name.padEnd(9) + (r.cov + "%").padStart(5) + " | live " + String(r.fixed).padStart(3) + " " + r.t_fixed.padEnd(10) +
+    "| shadow " + String(r.shadow).padStart(3) + "/w" + String(r.shadowWeight).padStart(3) +
+    " delta " + String((r.shadow ?? 0) - r.fixed).padStart(4) + " | " +
     String(r.fixed).padStart(3) + " " + r.t_fixed.padEnd(10) + " " + r.g_fixed.padEnd(9) + " | " +
     String(r.renorm).padStart(3) + " " + r.t_renorm.padEnd(10) + " " + r.g_renorm.padEnd(9) + " | " +
     r.g_capped.padEnd(9) + (r.capReason ? "(" + r.capReason + ")" : "")

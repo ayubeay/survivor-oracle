@@ -104,6 +104,8 @@ function calculateSurvivalScore(tokenData) {
         tokenAge: 100, liquidityDepth: 100,
       },
       weights: WEIGHTS,
+      shadow_denominator: { score: null, model_version: 'measured-evidence-v0.5.1-shadow',
+                            enforced: false, reason: 'NOT_APPLICABLE_TO_CURATED_SCORE' },
       coverage: { signals_expected: 7, signals_measured: 0, weight_coverage_percent: 0,
                   unmeasured: [], note: 'MEGACAP_MODE: score is assigned, not computed from signals' },
       timestamp: new Date().toISOString(),
@@ -150,6 +152,44 @@ function calculateSurvivalScore(tokenData) {
     note: 'reported only; unmeasured signals still contribute their neutral default to the score in this version',
   };
 
+  /* Shadow denominator - constitution v0.5.1, OBSERVATIONAL ONLY.
+     Recomputes the evidence score over signals that are both measured and valid, with the
+     denominator reduced accordingly. Never affects score, band, or gate.
+       lpLocked          measures burned LP, a launch convention rather than a universal
+                         safety property (verified 2026-08-02; SLERF burned 99.97%)
+       devWalletActivity never collected; its scorer always returns the no-data default */
+  var SHADOW_EXCLUDE = {
+    lpLocked: 'NOT_A_UNIVERSAL_SAFETY_SIGNAL',
+    devWalletActivity: 'NOT_MEASURED',
+  };
+  var shadowIncluded = [], shadowExcluded = [], shadowWeight = 0, shadowWeighted = 0;
+  signalChecks.forEach(function (c) {
+    if (SHADOW_EXCLUDE[c.signal]) {
+      shadowExcluded.push({ signal: c.signal, weight: c.w, reason: SHADOW_EXCLUDE[c.signal] });
+      return;
+    }
+    if (!c.measured) {
+      shadowExcluded.push({ signal: c.signal, weight: c.w, reason: c.reason || 'UNMEASURED' });
+      return;
+    }
+    var sub = breakdown[c.signal];
+    if (typeof sub !== 'number') {
+      shadowExcluded.push({ signal: c.signal, weight: c.w, reason: 'SUBSCORE_UNAVAILABLE' });
+      return;
+    }
+    shadowIncluded.push(c.signal);
+    shadowWeight += c.w;
+    shadowWeighted += sub * c.w;
+  });
+  var shadowDenominator = {
+    score: shadowWeight > 0 ? Math.round(shadowWeighted / shadowWeight) : null,
+    measured_weight: shadowWeight,
+    included_signals: shadowIncluded,
+    excluded_signals: shadowExcluded,
+    model_version: 'measured-evidence-v0.5.1-shadow',
+    enforced: false,
+  };
+
   var score = Math.round(totalScore);
   var riskLevel;
   if (score >= 75) riskLevel = 'LOW';
@@ -158,7 +198,8 @@ function calculateSurvivalScore(tokenData) {
   else if (score >= 40) riskLevel = 'VERY_HIGH';
   else riskLevel = 'EXTREME';
 
-  return { score: score, riskLevel: riskLevel, breakdown: breakdown, weights: WEIGHTS, coverage: coverage, timestamp: new Date().toISOString() };
+  return { score: score, riskLevel: riskLevel, breakdown: breakdown, weights: WEIGHTS, coverage: coverage,
+    shadow_denominator: shadowDenominator, timestamp: new Date().toISOString() };
 }
 
 function generateReasons(tokenData, breakdown) {
