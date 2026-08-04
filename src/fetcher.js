@@ -70,7 +70,6 @@ async function getTokenMintInfo(mintAddress) {
 /* Layer 1: mint authority classification from on-chain evidence only.
    Reports what can be proven from the mint address. Does not infer which program
    controls a PDA - that is not derivable from the mint and belongs to Layer 2. */
-const TOKEN_PROGRAM = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
 const SYSTEM_PROGRAM = '11111111111111111111111111111111';
 
 async function classifyMintAuthority(mintAddress, mintAuthority) {
@@ -94,7 +93,7 @@ async function classifyMintAuthority(mintAddress, mintAuthority) {
       };
     }
 
-    if ((owner === TOKEN_PROGRAM || owner === TOKEN_2022_PROGRAM_ID) && info && info.data.length === 355 && info.data[2] === 1) {
+    if ((owner === TOKEN_PROGRAM_ID || owner === TOKEN_2022_PROGRAM_ID) && info && info.data.length === 355 && info.data[2] === 1) {
       var m = info.data[0], n = info.data[1];
       var signers = [];
       for (var i = 0; i < n; i++) {
