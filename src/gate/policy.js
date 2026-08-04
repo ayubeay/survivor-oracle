@@ -237,6 +237,12 @@ function executionConstraints(transferControl, notionalUsd) {
    combined adverse evidence, not concentration by itself. */
 const HOLDER_CONTROL_POLICY = 'holder-control-v0.5.5-shadow';
 
+/* Three states that must never collapse into one "unknown":
+     OBSERVED     we measured it. A null decision here means no adverse finding.
+     UNAVAILABLE  we could not measure it - RPC failure, overload, absent field.
+     UNRESOLVED   we measured but could not classify the owner.
+   Each is a different operational reality. Merging them would let an observation failure
+   read as a clean result, which is the error this whole module exists to prevent. */
 function holderControlPolicy(ownerControl, notionalUsd) {
   if (!ownerControl) return { decision: null, measurement_status: 'UNAVAILABLE', reason: 'OWNER_CONTROL_UNAVAILABLE', disclosures: [] };
   const pct = ownerControl.largest_keypair_controllable_percent_of_supply;

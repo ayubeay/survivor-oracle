@@ -20,7 +20,7 @@ const { x402Middleware, initX402, x402SuccessLogger } = require('./x402');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const VERSION = '0.4.1';
+const VERSION = SCORING_VERSION;
 
 const cache = new Map();
 const CACHE_TTL = 5 * 60 * 1000;
