@@ -294,6 +294,34 @@ async function getHolderDistribution(mintAddress) {
       return { totalHolders: 0, top10HolderPercent: null, topHolders: [], note: 'NO_HOLDER_ACCOUNTS_RETURNED' };
     }
     var top10 = largestAccounts.value.slice(0, 10);
+    /* getTokenLargestAccounts returns accounts, not owners. One owner splitting across
+       several accounts reads as several holders - RAY's top 10 accounts resolve to 6
+       owners, one holding 64% of the sample. Resolved in a single batched call. */
+    var ownerAgg = null, distinctOwners = null, largestOwnerShare = null, ownerResolution = 'UNRESOLVED';
+    try {
+      var batch = await connection.getMultipleParsedAccounts(top10.map(function (a) { return a.address; }));
+      var byOwner = {};
+      var sampleTotal = 0n;
+      for (var bi = 0; bi < top10.length; bi++) {
+        var info = batch.value[bi] && batch.value[bi].data && batch.value[bi].data.parsed
+          ? batch.value[bi].data.parsed.info : null;
+        var own = info && info.owner ? info.owner : ('unresolved:' + bi);
+        var amt = BigInt(top10[bi].amount);
+        byOwner[own] = (byOwner[own] || 0n) + amt;
+        sampleTotal += amt;
+      }
+      var sorted = Object.keys(byOwner).map(function (k) { return { owner: k, amount: byOwner[k] }; })
+        .sort(function (x, y) { return y.amount > x.amount ? 1 : -1; });
+      distinctOwners = sorted.length;
+      largestOwnerShare = sampleTotal > 0n
+        ? Number(sorted[0].amount * 10000n / sampleTotal) / 100 : null;
+      ownerAgg = sorted.slice(0, 5).map(function (o) {
+        return { owner: o.owner, share_of_sample: sampleTotal > 0n ? Number(o.amount * 10000n / sampleTotal) / 100 : null };
+      });
+      ownerResolution = 'RESOLVED';
+    } catch (oErr) {
+      ownerResolution = 'OWNER_RESOLUTION_FAILED';
+    }
     // raw base units, same denomination as mint supply - percentage is computed in
     // fetchTokenData against total supply, not against the sampled accounts
     var top10RawUnits = largestAccounts.value.slice(0, 10)
@@ -303,6 +331,11 @@ async function getHolderDistribution(mintAddress) {
     var totalFromTop = Number(sampledRawUnits);
     return {
       totalHolders: largestAccounts.value.length,
+      accountsSampled: top10.length,
+      distinctOwners: distinctOwners,
+      largestOwnerShareOfSample: largestOwnerShare,
+      topOwners: ownerAgg,
+      ownerResolution: ownerResolution,
       top10RawUnits: top10RawUnits.toString(),
       sampledRawUnits: sampledRawUnits.toString(),
       top10HolderPercent: null,   // set by fetchTokenData once supply is known
@@ -400,10 +433,25 @@ async function fetchTokenData(mintAddress) {
     if (supplyRaw > 0n && holders && holders.top10RawUnits) {
       var t10 = BigInt(holders.top10RawUnits);
       holders.top10HolderPercent = Math.round(Number(t10 * 1000000n / supplyRaw) / 100) / 100;
+      /* The share of TOTAL SUPPLY held by the single largest owner among the sampled
+         accounts. Discriminates where top-10 concentration does not: RAY and TNSR both
+         report ~76% top-10, but RAY's largest owner holds 49% of supply against TNSR's
+         20%. Sampled from the top 10 accounts only - an owner holding an 11th account
+         outside the sample is not counted. */
+      if (typeof holders.largestOwnerShareOfSample === 'number' &&
+          typeof holders.top10HolderPercent === 'number') {
+        holders.largestOwnerPercentOfSupply =
+          Math.round(holders.top10HolderPercent * holders.largestOwnerShareOfSample) / 100;
+      }
       concentrationBasis = {
         denominator: 'total_supply',
         supply_raw: supplyRaw.toString(),
         accounts_sampled: holders.totalHolders,
+        distinct_owners: holders.distinctOwners ?? null,
+        owner_resolution: holders.ownerResolution ?? 'NOT_ATTEMPTED',
+        largest_owner_percent_of_supply: holders.largestOwnerPercentOfSupply ?? null,
+        largest_owner_share_of_sample: holders.largestOwnerShareOfSample ?? null,
+        sampling_limit: 'largest owner among the top 10 accounts; an 11th account is not observed',
         sampled_raw_units: holders.sampledRawUnits,
       };
     }
