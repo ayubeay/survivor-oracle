@@ -89,6 +89,8 @@ function evidenceFields(scoreObj, tokenData) {
     score_basis: isCurated ? 'curated' : 'computed',
     coverage: isCurated ? null : (scoreObj.coverage ?? null),
     shadow_denominator: scoreObj.shadow_denominator ?? null,
+    transfer_control_scoring: scoreObj.transfer_control_scoring ?? null,
+    shadow_transfer_control: scoreObj.shadow_transfer_control ?? null,   // deprecated alias
   };
 }
 
