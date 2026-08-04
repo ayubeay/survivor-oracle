@@ -212,12 +212,21 @@ function collectiveConcentrationPenalty(top10Pct) {
    points and never adds them. */
 function holderControlPenalty(tokenData) {
   var oc = (tokenData.concentrationBasis || {}).owner_control;
-  if (!oc) return { penalty: 0, reason: 'OWNER_CONTROL_UNAVAILABLE', enforced: false };
+  /* null, not 0. Zero asserts the policy evaluated the evidence and found no adverse
+     condition. null says it could not evaluate. RAY has a 49% controllable owner and
+     earns a penalty when measured; under RPC load the query failed and a zero would have
+     been indistinguishable from a clean result. */
+  if (!oc) return { penalty: null, measurement_status: 'UNAVAILABLE',
+                    reason: 'OWNER_CONTROL_UNAVAILABLE', enforced: false };
   var pct = oc.largest_keypair_controllable_percent_of_supply;
-  if (typeof pct !== 'number') return { penalty: 0, reason: 'KEYPAIR_SHARE_UNRESOLVED', enforced: false };
+  if (typeof pct !== 'number') return { penalty: null, measurement_status: 'UNAVAILABLE',
+                                        reason: 'KEYPAIR_SHARE_UNRESOLVED',
+                                        observation_failure: oc.observation_failure || null,
+                                        enforced: false };
   var penalty = pct > 70 ? 13 : pct > 50 ? 9 : pct > 35 ? 5 : pct > 20 ? 2 : 0;
   return {
     penalty: penalty,
+    measurement_status: 'OBSERVED',
     largest_keypair_controllable_percent_of_supply: pct,
     largest_owner_class: oc.largest_owner_class || null,
     reason: penalty === 0 ? 'NO_DOMINANT_CONTROLLABLE_OWNER' : 'CONTROLLABLE_OWNER_' + Math.round(pct) + '_PCT',

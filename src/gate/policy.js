@@ -23,7 +23,7 @@ const IRREVERSIBLE_KINDS = new Set(['bridge', 'lp_remove', 'lp_add']);
  * @param {string} args.kind         swap | lp_add | lp_remove | bridge | limit
  * @returns {SurvivorPolicy}
  */
-function buildPolicy({ score, risk_tier, confidence, reasons = [], kind = 'swap', coverage = null, notional_usd = 0, score_basis = 'unknown', transfer_control = null }) {
+function buildPolicy({ score, risk_tier, confidence, reasons = [], kind = 'swap', coverage = null, notional_usd = 0, score_basis = 'unknown', transfer_control = null, owner_control = null }) {
   const now = Math.floor(Date.now() / 1000);
   const expiresAt = now + 300; // policy valid for 5 minutes
 
@@ -95,6 +95,19 @@ function buildPolicy({ score, risk_tier, confidence, reasons = [], kind = 'swap'
 
   // Coverage cap - SHADOW ONLY. Computed and reported, never applied to policy.decision.
   // Promotion to enforcement happens only after harness validation of gate migrations.
+  const hc = holderControlPolicy(owner_control, notional_usd);
+  policy.shadow_holder_control = {
+    policy_version: HOLDER_CONTROL_POLICY,
+    enforced: false,
+    live_decision: policy.decision,
+    suggested_decision: hc.decision,
+    would_change: hc.decision !== null && hc.decision !== policy.decision,
+    reason: hc.reason,
+    measurement_status: hc.measurement_status || 'UNAVAILABLE',
+    disclosures: hc.disclosures,
+    note: 'DENY is never suggested from concentration alone.',
+  };
+
   const exec = executionConstraints(transfer_control, notional_usd);
   policy.shadow_execution_constraints = {
     policy_version: EXECUTION_CONSTRAINT_POLICY,
@@ -216,6 +229,34 @@ function executionConstraints(transferControl, notionalUsd) {
   return { decision: suggested, reason: reasons.join(',') || null, disclosures: disclosures };
 }
 
+/* Holder control as an execution concern - v0.5.5 shadow.
+   A dominant controllable owner is adverse evidence, but its economic role determines how
+   severe the response should be. Layer 1 cannot tell an issuer treasury from a whale, so
+   this discloses and constrains rather than denying on structure alone. DENY requires
+   combined adverse evidence, not concentration by itself. */
+const HOLDER_CONTROL_POLICY = 'holder-control-v0.5.5-shadow';
+
+function holderControlPolicy(ownerControl, notionalUsd) {
+  if (!ownerControl) return { decision: null, measurement_status: 'UNAVAILABLE', reason: 'OWNER_CONTROL_UNAVAILABLE', disclosures: [] };
+  const pct = ownerControl.largest_keypair_controllable_percent_of_supply;
+  if (typeof pct !== 'number') {
+    return { decision: null, reason: 'KEYPAIR_SHARE_UNRESOLVED', measurement_status: 'UNAVAILABLE',
+             disclosures: [{ type: 'HOLDER_CONTROL', note: 'Controllable ownership could not be measured. Absence of a finding is not a clean result.' }] };
+  }
+  const disclosures = [{
+    type: 'HOLDER_CONTROL',
+    largest_keypair_controllable_percent_of_supply: pct,
+    owner_class: ownerControl.largest_owner_class || null,
+    entity_role: 'UNKNOWN',
+    note: 'An address structurally able to sign holds this share. Whether it is an issuer treasury, exchange, custodian or an individual is not established at Layer 1.',
+  }];
+  let decision = null, reason = null;
+  if (pct > 50) { decision = 'THROTTLE'; reason = 'CONTROLLABLE_OWNER_ABOVE_50_PCT'; }
+  else if (pct > 35) { decision = 'CHALLENGE'; reason = 'CONTROLLABLE_OWNER_ABOVE_35_PCT'; }
+  else if (pct > 20) { reason = 'CONTROLLABLE_OWNER_ABOVE_20_PCT_DISCLOSED'; }
+  return { decision, reason, measurement_status: 'OBSERVED', disclosures };
+}
+
 function applyIrreversibilityHardening(policy, kind) {
   const irreversibleReason = { code: 'IRREVERSIBLE_ACTION', severity: 'high' };
 
@@ -244,4 +285,4 @@ function applyIrreversibilityHardening(policy, kind) {
   return escalations[policy.decision] ? escalations[policy.decision]() : policy;
 }
 
-module.exports = { buildPolicy, coverageCap, COVERAGE_CAP_POLICY, executionConstraints, EXECUTION_CONSTRAINT_POLICY };
+module.exports = { buildPolicy, coverageCap, COVERAGE_CAP_POLICY, executionConstraints, EXECUTION_CONSTRAINT_POLICY, holderControlPolicy, HOLDER_CONTROL_POLICY };

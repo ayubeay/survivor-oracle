@@ -94,3 +94,31 @@ Status: shadow, enforced false. Needs a full population run before promotion.
 PYUSD's 57% is issuer custody, and Layer 1 cannot distinguish an issuer treasury from an
 individual whale. The penalty is correct on its own terms and the interpretation gap is
 real. That belongs to Layer 2 enrichment, not to a special case in the penalty.
+
+
+## Measurement and policy are separate layers
+
+MEASUREMENT - what the chain shows
+  owner aggregation across sampled accounts
+  address classification: keypair-signable, attributed program, unattributed off-curve
+  supply-denominated shares for each class
+  provenance and sampling limits
+  no interpretation, no thresholds, no scoring
+
+POLICY - what a consumer does with it
+  SURVIVOR score: adverse-only penalty on large controllable ownership
+  Gate: may tighten execution thresholds independently of the score
+  Receipts: may report the measurement without it affecting anything
+
+Two advantages. Improving holder classification does not require redesigning the scoring
+model. And different consumers can weigh the same measurement differently - a $50 lookup
+and a $50,000 swap need not treat a 49% controllable owner identically.
+
+This is the same separation applied to transfer fees: SURVIVOR reports that a fee exists,
+Gate computes what it costs on this transaction.
+
+## The asymmetry generalises
+Evidence of danger should reduce confidence. Absence of one specific danger should not
+raise it. This applies beyond holder concentration - to governance concentration, upgrade
+authority, bridge custody, validator distribution, treasury control. Any structural signal
+where "we did not find this hazard" is being read as "this asset is sound".
