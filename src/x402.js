@@ -22,12 +22,18 @@ const routes = {
   },
 };
 
+let x402Status = { healthy: false, error: 'not initialized', facilitator: FACILITATOR_URL };
+
 async function initX402() {
   try {
     await resourceServer.initialize();
-    console.log('[x402] Resource server initialized ✓');
+    x402Status = { healthy: true, facilitator: FACILITATOR_URL };
+    console.log('[x402] Resource server initialized, facilitator reachable');
   } catch (e) {
-    console.warn('[x402] Facilitator init failed:', e.message);
+    x402Status = { healthy: false, error: e.message, facilitator: FACILITATOR_URL };
+    console.warn('[x402] DEGRADED - facilitator unreachable at ' + FACILITATOR_URL + ':', e.message);
+    console.warn('[x402] The Base rail cannot take payments in this state.');
+    return;
   }
 }
 
@@ -46,4 +52,4 @@ function x402SuccessLogger(req, res, next) {
   next();
 }
 
-module.exports = { x402Middleware, initX402, x402SuccessLogger };
+module.exports = { x402Middleware, initX402, x402SuccessLogger, getX402Status: function () { return x402Status; } };
