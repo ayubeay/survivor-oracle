@@ -251,11 +251,44 @@ async function getHolderDistribution(mintAddress) {
   try {
     var mintPubkey = new PublicKey(mintAddress);
     var largestAccounts;
-    try {
-      largestAccounts = await connection.getTokenLargestAccounts(mintPubkey);
-    } catch (lErr) {
-      console.log('[SURVIVOR] Holder query failed for ' + mintAddress.slice(0, 16) + '..., using fallback');
-      return { totalHolders: null, top10HolderPercent: null, topHolders: [], note: 'HOLDER_QUERY_FAILED' };
+    /* RPC congestion is a failure to observe, not an observation about the token. A 429
+       under parallel load previously became HOLDER_QUERY_FAILED, silently dropping a
+       15-weight signal and making the same token score differently depending on how busy
+       we were. Retry transient failures; classify what actually happened. */
+    var attempts = 0, lastCategory = null, lastMsg = null;
+    while (attempts < 3) {
+      attempts++;
+      try {
+        largestAccounts = await connection.getTokenLargestAccounts(mintPubkey);
+        break;
+      } catch (lErr) {
+        lastMsg = String(lErr && lErr.message ? lErr.message : lErr);
+        var rateLimited = lastMsg.indexOf('429') >= 0 || lastMsg.toLowerCase().indexOf('too many requests') >= 0
+          || lastMsg.indexOf('deprioritized') >= 0;
+        var timedOut = lastMsg.toLowerCase().indexOf('timeout') >= 0 || lastMsg.indexOf('ETIMEDOUT') >= 0
+          || lastMsg.indexOf('ECONNRESET') >= 0;
+        /* Observed in practice: "account index service overloaded, please try again".
+           Not a 429 and not a timeout, but explicitly transient - the node is asking us
+           to retry. Treating it as terminal was wrong. */
+        var overloaded = lastMsg.toLowerCase().indexOf('overloaded') >= 0
+          || lastMsg.toLowerCase().indexOf('please try again') >= 0
+          || lastMsg.toLowerCase().indexOf('service unavailable') >= 0;
+        lastCategory = rateLimited ? 'HOLDER_QUERY_RATE_LIMITED'
+          : timedOut ? 'HOLDER_QUERY_TIMEOUT'
+          : overloaded ? 'HOLDER_QUERY_NODE_OVERLOADED' : 'HOLDER_QUERY_RPC_FAILED';
+        var retryable = rateLimited || timedOut || overloaded;
+        if (attempts >= 3 || !retryable) break;
+        var backoff = (attempts === 1 ? 400 : 900) + Math.floor(Math.random() * 200);
+        await new Promise(function (r) { setTimeout(r, backoff); });
+      }
+    }
+    if (!largestAccounts) {
+      console.log('[SURVIVOR] Holder query unavailable for ' + mintAddress.slice(0, 16) + '..: '
+        + lastCategory + ' after ' + attempts + ' attempt(s)');
+      return { totalHolders: null, top10HolderPercent: null, topHolders: [],
+               note: lastCategory || 'HOLDER_QUERY_FAILED',
+               observation_failure: { category: lastCategory, attempts: attempts,
+                                      detail: (lastMsg || '').slice(0, 120) } };
     }
     if (!largestAccounts.value || largestAccounts.value.length === 0) {
       return { totalHolders: 0, top10HolderPercent: null, topHolders: [], note: 'NO_HOLDER_ACCOUNTS_RETURNED' };
