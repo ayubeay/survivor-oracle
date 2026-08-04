@@ -203,6 +203,30 @@ function collectiveConcentrationPenalty(top10Pct) {
   return 20;
 }
 
+/* Holder control penalty - shadow, adverse-only.
+   Variant D (largest keypair-controllable share replacing the top-10 subscore) was
+   measured and rejected: 14 of 16 tokens rose, 4 gates loosened, and SLERF - a token that
+   collapsed - scored 100 and gated ALLOW because no keypair holds much of its supply.
+   The measurement was correct and the inference was wrong. Absence of a controlling signer
+   is not evidence of safety; it only means that risk was not observed. So this subtracts
+   points and never adds them. */
+function holderControlPenalty(tokenData) {
+  var oc = (tokenData.concentrationBasis || {}).owner_control;
+  if (!oc) return { penalty: 0, reason: 'OWNER_CONTROL_UNAVAILABLE', enforced: false };
+  var pct = oc.largest_keypair_controllable_percent_of_supply;
+  if (typeof pct !== 'number') return { penalty: 0, reason: 'KEYPAIR_SHARE_UNRESOLVED', enforced: false };
+  var penalty = pct > 70 ? 13 : pct > 50 ? 9 : pct > 35 ? 5 : pct > 20 ? 2 : 0;
+  return {
+    penalty: penalty,
+    largest_keypair_controllable_percent_of_supply: pct,
+    largest_owner_class: oc.largest_owner_class || null,
+    reason: penalty === 0 ? 'NO_DOMINANT_CONTROLLABLE_OWNER' : 'CONTROLLABLE_OWNER_' + Math.round(pct) + '_PCT',
+    direction: 'adverse_only',
+    note: 'Subtracts from the score and never adds. A large controllable owner is evidence of risk; its absence is not evidence of safety.',
+    enforced: false,
+  };
+}
+
 function holderStructureShadow(tokenData, legacyTop10Subscore) {
   var basis = tokenData.concentrationBasis || {};
   var pct = basis.largest_owner_percent_of_supply;
@@ -372,6 +396,7 @@ function shadowTransferControlScore(tc) {
   };
 
   var holderShadow = holderStructureShadow(tokenData, breakdown.holderConcentration);
+  var holderPenalty = holderControlPenalty(tokenData);
 
   var shadowDenominator = {
     score: shadowWeight > 0 ? Math.round(shadowWeighted / shadowWeight) : null,
@@ -393,6 +418,7 @@ function shadowTransferControlScore(tc) {
   return { score: score, riskLevel: riskLevel, breakdown: breakdown, weights: WEIGHTS, coverage: coverage,
     shadow_denominator: shadowDenominator,
     holder_structure_shadow: holderShadow,
+    holder_control_penalty_shadow: holderPenalty,
     transfer_control_scoring: shadowTransferControl,
     shadow_transfer_control: shadowTransferControl,
     timestamp: new Date().toISOString() };
