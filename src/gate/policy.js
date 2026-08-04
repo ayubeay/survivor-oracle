@@ -106,6 +106,7 @@ function buildPolicy({ score, risk_tier, confidence, reasons = [], kind = 'swap'
     measurement_status: hc.measurement_status || 'UNAVAILABLE',
     disclosures: hc.disclosures,
     note: 'DENY is never suggested from concentration alone.',
+    application_rule: 'If promoted, this is a FLOOR not a replacement - the outcome is the more restrictive of the live decision and this suggestion. A suggestion looser than the live decision must never loosen it. PYUSD observed live READ_ONLY with a THROTTLE suggestion; the outcome would stay READ_ONLY.',
   };
 
   const exec = executionConstraints(transfer_control, notional_usd);
