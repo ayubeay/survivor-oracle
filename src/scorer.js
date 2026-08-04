@@ -167,6 +167,101 @@ function calculateSurvivalScore(tokenData) {
    Scores holder freedom: what can restrict, redirect, tax or disable a transfer, and how
    concentrated is the power to do so. Disclosure does not earn credit - a documented
    freeze authority is still a freeze authority. */
+/* holder-structure-v0.5.4-shadow. Largest-owner share answers a different question than
+   top-10 concentration: what one party can unilaterally sell. RAY and TNSR both report
+   ~76% top-10, but RAY's largest owner holds 49% of supply against TNSR's 20%.
+   Continuous interpolation, no bucket cliffs. Subscores are higher when safer, so the
+   composite takes the MINIMUM - the more cautious of the two readings. */
+const LARGEST_OWNER_ANCHORS = [
+  [0, 100], [5, 100], [10, 85], [20, 60], [35, 35], [50, 15], [100, 5],
+];
+
+function largestOwnerSubscore(pct) {
+  if (typeof pct !== 'number' || !isFinite(pct)) return null;
+  var p = Math.max(0, Math.min(100, pct));
+  for (var i = 1; i < LARGEST_OWNER_ANCHORS.length; i++) {
+    var lo = LARGEST_OWNER_ANCHORS[i - 1], hi = LARGEST_OWNER_ANCHORS[i];
+    if (p <= hi[0]) {
+      var span = hi[0] - lo[0];
+      var t = span === 0 ? 0 : (p - lo[0]) / span;
+      return Math.round(lo[1] + t * (hi[1] - lo[1]));
+    }
+  }
+  return 5;
+}
+
+/* Variant B: largest-owner share as the primary measure of unilateral control, with a
+   bounded penalty for collective concentration. Variant A's min() composite was safe but
+   non-discriminating: the legacy top-10 curve saturates at 20 for anything above 70%, so
+   min() almost always returned the legacy value and the owner signal never spoke. */
+function collectiveConcentrationPenalty(top10Pct) {
+  if (typeof top10Pct !== 'number') return 0;
+  if (top10Pct <= 35) return 0;
+  if (top10Pct <= 50) return 5;
+  if (top10Pct <= 70) return 10;
+  if (top10Pct <= 85) return 15;
+  return 20;
+}
+
+function holderStructureShadow(tokenData, legacyTop10Subscore) {
+  var basis = tokenData.concentrationBasis || {};
+  var pct = basis.largest_owner_percent_of_supply;
+  var loSub = largestOwnerSubscore(pct);
+  var composite = (typeof loSub === 'number' && typeof legacyTop10Subscore === 'number')
+    ? Math.min(loSub, legacyTop10Subscore) : (loSub ?? legacyTop10Subscore ?? null);
+  var interp = null;
+  if (typeof pct === 'number') {
+    interp = pct > 50 ? 'MAJORITY_OWNER_OBSERVED'
+      : pct > 35 ? 'DOMINANT_OWNER_OBSERVED'
+      : pct > 10 ? 'SIGNIFICANT_OWNER_OBSERVED' : 'NO_DOMINANT_OWNER_OBSERVED';
+  }
+  return {
+    model_version: 'holder-structure-v0.5.4-shadow',
+    enforced: false,
+    weight: WEIGHTS.topHolderConcentration,
+    legacy_top10_percent: tokenData.top10HolderPercent ?? null,
+    legacy_subscore: legacyTop10Subscore,
+    largest_owner_percent_of_supply: pct ?? null,
+    largest_owner_subscore: loSub,
+    distinct_owners_in_sample: basis.distinct_owners ?? null,
+    composite_subscore: composite,
+    /* Variant C: largest-owner share alone as the subscore. The collective penalty in
+       variant B failed the incremental-information test - three penalty scales produced
+       rankings differing by 2 of 15 positions, all adjacent swaps, and the owner-only
+       ordering matched them. Top-10 stays as reported context, not a scoring input. */
+    variant_c: (typeof loSub === 'number')
+      ? { method: 'largest_owner_only', subscore: loSub,
+          score_delta: typeof legacyTop10Subscore === 'number'
+            ? Math.round(((loSub - legacyTop10Subscore) * WEIGHTS.topHolderConcentration) / 100) : null }
+      : { subscore: null, reason: 'OWNER_SHARE_UNAVAILABLE' },
+    variant_b: (function () {
+      if (typeof loSub !== 'number') return { subscore: null, reason: 'OWNER_SHARE_UNAVAILABLE' };
+      var penalty = collectiveConcentrationPenalty(tokenData.top10HolderPercent);
+      var sub = Math.max(5, loSub - penalty);
+      return {
+        method: 'owner_primary_with_collective_penalty',
+        largest_owner_subscore: loSub,
+        collective_penalty: penalty,
+        subscore: sub,
+        score_delta: typeof legacyTop10Subscore === 'number'
+          ? Math.round(((sub - legacyTop10Subscore) * WEIGHTS.topHolderConcentration) / 100) : null,
+      };
+    })(),
+    score_delta: (typeof composite === 'number' && typeof legacyTop10Subscore === 'number')
+      ? Math.round(((composite - legacyTop10Subscore) * WEIGHTS.topHolderConcentration) / 100)
+      : null,
+    interpretation: interp,
+    owner_resolution: basis.owner_resolution ?? 'NOT_ATTEMPTED',
+    beneficial_owner_classification: 'UNKNOWN',
+    custody_or_issuer_context: 'NOT_ESTABLISHED_AT_LAYER_1',
+    sampling_limit: basis.sampling_limit ?? 'largest owner among the sampled accounts',
+    limitations: [
+      'An owner address may be an issuer treasury, custodian, exchange, protocol vault or an ordinary whale. Layer 1 cannot distinguish them.',
+      'distinct_owners counts addresses, not organisations. Ten addresses may be one entity; six may be independent.',
+    ],
+  };
+}
+
 function shadowTransferControlScore(tc) {
   if (!tc || !tc.state || tc.state === 'UNRESOLVED') {
     return { score: null, reason: 'TRANSFER_CONTROL_UNRESOLVED' };
@@ -276,6 +371,8 @@ function shadowTransferControlScore(tc) {
       : null,
   };
 
+  var holderShadow = holderStructureShadow(tokenData, breakdown.holderConcentration);
+
   var shadowDenominator = {
     score: shadowWeight > 0 ? Math.round(shadowWeighted / shadowWeight) : null,
     measured_weight: shadowWeight,
@@ -295,6 +392,7 @@ function shadowTransferControlScore(tc) {
 
   return { score: score, riskLevel: riskLevel, breakdown: breakdown, weights: WEIGHTS, coverage: coverage,
     shadow_denominator: shadowDenominator,
+    holder_structure_shadow: holderShadow,
     transfer_control_scoring: shadowTransferControl,
     shadow_transfer_control: shadowTransferControl,
     timestamp: new Date().toISOString() };
