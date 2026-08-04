@@ -326,29 +326,37 @@ async function getHolderDistribution(mintAddress) {
         var onCurve = PublicKey.isOnCurve(new PublicKey(addr).toBytes());
         var acct = ownerInfos[i];
         var prog = acct ? acct.owner.toBase58() : null;
-        if (!acct) classOf[addr] = onCurve ? 'WALLET_NO_ACCOUNT' : 'PDA_NO_ACCOUNT';
-        else if (!onCurve && prog === SYSTEM_PROGRAM) classOf[addr] = 'PDA_SYSTEM_OWNED';
+        if (!acct) classOf[addr] = onCurve ? 'WALLET_NO_ACCOUNT' : 'OFF_CURVE_UNATTRIBUTED';
+        /* Off-curve with no account: proves a keypair cannot sign for it, proves nothing
+           about which program derived it. PDA_PROGRAM_OWNED is reserved for addresses whose
+           derivation has actually been established. */
+        else if (!onCurve && prog === SYSTEM_PROGRAM) classOf[addr] = 'OFF_CURVE_UNATTRIBUTED';
         else if (!onCurve) classOf[addr] = 'PDA_PROGRAM_OWNED';
         else if (prog === SYSTEM_PROGRAM) classOf[addr] = 'WALLET';
         else if (prog === TOKEN_PROGRAM_ID || prog === TOKEN_2022_PROGRAM_ID) classOf[addr] = 'TOKEN_PROGRAM_OWNED';
         else classOf[addr] = 'PROGRAM_OWNED';
       });
       var CONTROLLABLE = { WALLET: 1, WALLET_NO_ACCOUNT: 1, TOKEN_PROGRAM_OWNED: 1 };
-      var PROG_DERIVED = { PDA_PROGRAM_OWNED: 1, PDA_SYSTEM_OWNED: 1, PDA_NO_ACCOUNT: 1, PROGRAM_OWNED: 1 };
-      var cMax = 0n, pMax = 0n, uMax = 0n, cSum = 0n, pSum = 0n, uSum = 0n;
+      var ATTRIBUTED_PROGRAM = { PDA_PROGRAM_OWNED: 1, PROGRAM_OWNED: 1 };
+      var OFF_CURVE_UNATTRIB = { OFF_CURVE_UNATTRIBUTED: 1 };
+      var cMax = 0n, pMax = 0n, oMax = 0n, uMax = 0n;
+      var cSum = 0n, pSum = 0n, oSum = 0n, uSum = 0n;
       sorted.forEach(function (o) {
         var k = classOf[o.owner] || 'UNRESOLVED';
         if (CONTROLLABLE[k]) { cSum += o.amount; if (o.amount > cMax) cMax = o.amount; }
-        else if (PROG_DERIVED[k]) { pSum += o.amount; if (o.amount > pMax) pMax = o.amount; }
+        else if (ATTRIBUTED_PROGRAM[k]) { pSum += o.amount; if (o.amount > pMax) pMax = o.amount; }
+        else if (OFF_CURVE_UNATTRIB[k]) { oSum += o.amount; if (o.amount > oMax) oMax = o.amount; }
         else { uSum += o.amount; if (o.amount > uMax) uMax = o.amount; }
       });
       var pct = function (v) { return sampleTotal > 0n ? Number(v * 10000n / sampleTotal) / 100 : null; };
       ownerControl = {
-        largest_controllable_share_of_sample: pct(cMax),
-        largest_program_derived_share_of_sample: pct(pMax),
+        largest_keypair_controllable_share_of_sample: pct(cMax),
+        largest_attributed_program_share_of_sample: pct(pMax),
+        largest_unattributed_off_curve_share_of_sample: pct(oMax),
         largest_unresolved_share_of_sample: pct(uMax),
         controllable_total_share: pct(cSum),
-        program_derived_total_share: pct(pSum),
+        attributed_program_total_share: pct(pSum),
+        unattributed_off_curve_total_share: pct(oSum),
         unresolved_total_share: pct(uSum),
         largest_owner_address: sorted[0].owner,
         largest_owner_class: classOf[sorted[0].owner] || 'UNRESOLVED',
@@ -486,6 +494,19 @@ async function fetchTokenData(mintAddress) {
           typeof holders.top10HolderPercent === 'number') {
         holders.largestOwnerPercentOfSupply =
           Math.round(holders.top10HolderPercent * holders.largestOwnerShareOfSample) / 100;
+      }
+      /* Owner-control shares are sample-relative. Scoring needs a supply denominator -
+         64.17% of the sampled top-10 is 49.19% of RAY's total supply. Reporting the
+         sample figure as though it were a supply figure would repeat the top-10
+         denominator error corrected in 0.4.3. */
+      if (holders.ownerControl && typeof holders.top10HolderPercent === 'number') {
+        var oc = holders.ownerControl, t10 = holders.top10HolderPercent;
+        var toSupply = function (s) { return typeof s === 'number' ? Math.round(t10 * s) / 100 : null; };
+        oc.largest_keypair_controllable_percent_of_supply = toSupply(oc.largest_keypair_controllable_share_of_sample);
+        oc.largest_attributed_program_percent_of_supply = toSupply(oc.largest_attributed_program_share_of_sample);
+        oc.largest_unattributed_off_curve_percent_of_supply = toSupply(oc.largest_unattributed_off_curve_share_of_sample);
+        oc.keypair_controllable_percent_of_supply = toSupply(oc.controllable_total_share);
+        oc.denominator_note = 'share_of_sample is relative to the sampled top-10 accounts; percent_of_supply multiplies by the top-10 share of total supply';
       }
       concentrationBasis = {
         denominator: 'total_supply',
