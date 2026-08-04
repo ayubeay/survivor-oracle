@@ -210,6 +210,58 @@ function collectiveConcentrationPenalty(top10Pct) {
    The measurement was correct and the inference was wrong. Absence of a controlling signer
    is not evidence of safety; it only means that risk was not observed. So this subtracts
    points and never adds them. */
+/* validated-five-v0.6.0-shadow.
+   A FIXED five-signal model, not per-token renormalization. The rejected shadow
+   denominator divided by whatever happened to resolve for each token, so JUP and RAY hit
+   100 after a holder query failed - it rewarded ignorance. Here the five signals and their
+   weights are fixed in advance and always sum to 100. If any required signal fails to
+   resolve, the score is INCOMPLETE rather than renormalized over four.
+
+   LP and developer activity are excluded, not reweighted: LP measures burned liquidity,
+   which tracks launch convention rather than safety, and developer activity has no data
+   source at all - its subscore of 50 was a constant contributing 7.5 points to every
+   token while coverage reported it as unmeasured. */
+const VALIDATED_FIVE_WEIGHTS = {
+  mintAuthority: 31,
+  freezeAuthority: 15,     // now carries the transfer-control subscore
+  topHolderConcentration: 23,
+  tokenAge: 15,
+  liquidityDepth: 16,
+};
+
+function validatedFiveScore(breakdown, tokenData) {
+  var required = Object.keys(VALIDATED_FIVE_WEIGHTS);
+  var missing = [], total = 0;
+  for (var i = 0; i < required.length; i++) {
+    var key = required[i] === 'topHolderConcentration' ? 'holderConcentration' : required[i];
+    var sub = breakdown[key];
+    if (typeof sub !== 'number') { missing.push(required[i]); continue; }
+    total += sub * VALIDATED_FIVE_WEIGHTS[required[i]] / 100;
+  }
+  if (missing.length) {
+    return {
+      model_version: 'validated-five-v0.6.0-shadow',
+      enforced: false,
+      score: null,
+      score_status: 'INCOMPLETE',
+      missing_required_signals: missing,
+      note: 'A required signal did not resolve. The denominator is NOT reduced - that would reward the observation failure.',
+      weights: VALIDATED_FIVE_WEIGHTS,
+    };
+  }
+  return {
+    model_version: 'validated-five-v0.6.0-shadow',
+    enforced: false,
+    score: Math.round(total),
+    score_status: 'COMPLETE',
+    excluded_signals: [
+      { signal: 'lpLocked', reason: 'MEASURES_BURN_NOT_SAFETY' },
+      { signal: 'devWalletActivity', reason: 'NO_DATA_SOURCE' },
+    ],
+    weights: VALIDATED_FIVE_WEIGHTS,
+  };
+}
+
 function holderControlPenalty(tokenData) {
   var oc = (tokenData.concentrationBasis || {}).owner_control;
   /* null, not 0. Zero asserts the policy evaluated the evidence and found no adverse
@@ -406,6 +458,7 @@ function shadowTransferControlScore(tc) {
 
   var holderShadow = holderStructureShadow(tokenData, breakdown.holderConcentration);
   var holderPenalty = holderControlPenalty(tokenData);
+  var validatedFive = validatedFiveScore(breakdown, tokenData);
 
   var shadowDenominator = {
     score: shadowWeight > 0 ? Math.round(shadowWeighted / shadowWeight) : null,
@@ -428,6 +481,7 @@ function shadowTransferControlScore(tc) {
     shadow_denominator: shadowDenominator,
     holder_structure_shadow: holderShadow,
     holder_control_penalty_shadow: holderPenalty,
+    validated_five_shadow: validatedFive,
     transfer_control_scoring: shadowTransferControl,
     shadow_transfer_control: shadowTransferControl,
     timestamp: new Date().toISOString() };
