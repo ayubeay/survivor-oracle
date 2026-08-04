@@ -94,7 +94,7 @@ async function classifyMintAuthority(mintAddress, mintAuthority) {
       };
     }
 
-    if ((owner === TOKEN_PROGRAM || owner === TOKEN_2022_PROGRAM) && info && info.data.length === 355 && info.data[2] === 1) {
+    if ((owner === TOKEN_PROGRAM || owner === TOKEN_2022_PROGRAM_ID) && info && info.data.length === 355 && info.data[2] === 1) {
       var m = info.data[0], n = info.data[1];
       var signers = [];
       for (var i = 0; i < n; i++) {
@@ -132,7 +132,6 @@ async function classifyMintAuthority(mintAddress, mintAuthority) {
    what observable authority or capability can restrict, redirect, tax, or disable a
    holder's transfer? Reports capabilities and who holds them. Does not infer intent -
    a permanent delegate is a disclosed power, not evidence of misuse. */
-const TOKEN_2022_PROGRAM = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
 
 async function classifyAuthorityFor(addr) {
   if (!addr) return null;
@@ -150,7 +149,7 @@ async function classifyTransferControl(mintAddress) {
     var pk = new PublicKey(mintAddress);
     var raw = await connection.getAccountInfo(pk);
     if (!raw) return { state: 'UNRESOLVED', reason: 'MINT_ACCOUNT_NOT_FOUND' };
-    var program = raw.owner.toBase58() === TOKEN_2022_PROGRAM ? 'TOKEN_2022' : 'CLASSIC_SPL';
+    var program = raw.owner.toBase58() === TOKEN_2022_PROGRAM_ID ? 'TOKEN_2022' : 'CLASSIC_SPL';
 
     var parsed = await connection.getParsedAccountInfo(pk);
     var info = parsed.value && parsed.value.data && parsed.value.data.parsed
