@@ -29,3 +29,21 @@ SAP agent (stranded, zero calls), and this Base rail (non-functional). A fourth 
 ACP - was under consideration.
 
 The open question is demand, not distribution.
+
+
+## Observed symptom (2026-08-04)
+GET /score/:mint returns 402, but not a protocol 402:
+
+    {"error":"payment_required","message":"This endpoint requires payment...","upgrade":"DM ..."}
+
+No accepts block, no network, no payTo, no PAYMENT-REQUIRED header. That body comes from
+src/auth.js:103.
+
+Middleware order is x402 first (index.js:36) then authMiddleware (index.js:47), so x402 is
+passing the request through rather than challenging it - consistent with a resourceServer
+that never loaded supported kinds from the unreachable facilitator, leaving it with no
+scheme to quote.
+
+Net effect: an x402 client receives a 402 with nothing to pay against. Fixing the
+facilitator URL is the first step; whether the challenge then fires needs verifying rather
+than assuming.
