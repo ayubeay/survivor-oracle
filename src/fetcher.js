@@ -295,7 +295,7 @@ async function getHolderDistribution(mintAddress) {
     /* getTokenLargestAccounts returns accounts, not owners. One owner splitting across
        several accounts reads as several holders - RAY's top 10 accounts resolve to 6
        owners, one holding 64% of the sample. Resolved in a single batched call. */
-    var ownerAgg = null, distinctOwners = null, largestOwnerShare = null, ownerResolution = 'UNRESOLVED';
+    var ownerAgg = null, distinctOwners = null, largestOwnerShare = null, ownerResolution = 'UNRESOLVED', ownerControl = null;
     try {
       var batch = await connection.getMultipleParsedAccounts(top10.map(function (a) { return a.address; }));
       var byOwner = {};
@@ -310,6 +310,51 @@ async function getHolderDistribution(mintAddress) {
       }
       var sorted = Object.keys(byOwner).map(function (k) { return { owner: k, amount: byOwner[k] }; })
         .sort(function (x, y) { return y.amount > x.amount ? 1 : -1; });
+
+      /* Classify every owner by whether it can structurally sign. This says nothing about
+         WHO holds a key - a wallet may be an exchange, custodian or individual. It
+         separates "an address that can sign" from "a program-derived balance".
+         Proven case: SLERF's dominant owner derives from Raydium AMM v4 with the seed
+         'amm authority', so 92% of its sampled balance is pool liquidity, not a whale. */
+      var ownerAddrs = sorted.map(function (o) { return o.owner; })
+        .filter(function (a) { return a.indexOf('unresolved:') !== 0; });
+      var ownerInfos = ownerAddrs.length
+        ? await connection.getMultipleAccountsInfo(ownerAddrs.map(function (a) { return new PublicKey(a); }))
+        : [];
+      var classOf = {};
+      ownerAddrs.forEach(function (addr, i) {
+        var onCurve = PublicKey.isOnCurve(new PublicKey(addr).toBytes());
+        var acct = ownerInfos[i];
+        var prog = acct ? acct.owner.toBase58() : null;
+        if (!acct) classOf[addr] = onCurve ? 'WALLET_NO_ACCOUNT' : 'PDA_NO_ACCOUNT';
+        else if (!onCurve && prog === SYSTEM_PROGRAM) classOf[addr] = 'PDA_SYSTEM_OWNED';
+        else if (!onCurve) classOf[addr] = 'PDA_PROGRAM_OWNED';
+        else if (prog === SYSTEM_PROGRAM) classOf[addr] = 'WALLET';
+        else if (prog === TOKEN_PROGRAM_ID || prog === TOKEN_2022_PROGRAM_ID) classOf[addr] = 'TOKEN_PROGRAM_OWNED';
+        else classOf[addr] = 'PROGRAM_OWNED';
+      });
+      var CONTROLLABLE = { WALLET: 1, WALLET_NO_ACCOUNT: 1, TOKEN_PROGRAM_OWNED: 1 };
+      var PROG_DERIVED = { PDA_PROGRAM_OWNED: 1, PDA_SYSTEM_OWNED: 1, PDA_NO_ACCOUNT: 1, PROGRAM_OWNED: 1 };
+      var cMax = 0n, pMax = 0n, uMax = 0n, cSum = 0n, pSum = 0n, uSum = 0n;
+      sorted.forEach(function (o) {
+        var k = classOf[o.owner] || 'UNRESOLVED';
+        if (CONTROLLABLE[k]) { cSum += o.amount; if (o.amount > cMax) cMax = o.amount; }
+        else if (PROG_DERIVED[k]) { pSum += o.amount; if (o.amount > pMax) pMax = o.amount; }
+        else { uSum += o.amount; if (o.amount > uMax) uMax = o.amount; }
+      });
+      var pct = function (v) { return sampleTotal > 0n ? Number(v * 10000n / sampleTotal) / 100 : null; };
+      ownerControl = {
+        largest_controllable_share_of_sample: pct(cMax),
+        largest_program_derived_share_of_sample: pct(pMax),
+        largest_unresolved_share_of_sample: pct(uMax),
+        controllable_total_share: pct(cSum),
+        program_derived_total_share: pct(pSum),
+        unresolved_total_share: pct(uSum),
+        largest_owner_address: sorted[0].owner,
+        largest_owner_class: classOf[sorted[0].owner] || 'UNRESOLVED',
+        classification_method: 'address_curve_and_account_owner',
+        limitation: 'Structural signing capability only. A wallet may be an exchange, custodian or individual; Layer 1 cannot distinguish them. Program-derived balances are not attributed to a controlling program unless separately proven by derivation.',
+      };
       distinctOwners = sorted.length;
       largestOwnerShare = sampleTotal > 0n
         ? Number(sorted[0].amount * 10000n / sampleTotal) / 100 : null;
@@ -334,6 +379,7 @@ async function getHolderDistribution(mintAddress) {
       largestOwnerShareOfSample: largestOwnerShare,
       topOwners: ownerAgg,
       ownerResolution: ownerResolution,
+      ownerControl: ownerControl,
       top10RawUnits: top10RawUnits.toString(),
       sampledRawUnits: sampledRawUnits.toString(),
       top10HolderPercent: null,   // set by fetchTokenData once supply is known
@@ -448,6 +494,7 @@ async function fetchTokenData(mintAddress) {
         distinct_owners: holders.distinctOwners ?? null,
         owner_resolution: holders.ownerResolution ?? 'NOT_ATTEMPTED',
         largest_owner_percent_of_supply: holders.largestOwnerPercentOfSupply ?? null,
+        owner_control: holders.ownerControl ?? null,
         largest_owner_share_of_sample: holders.largestOwnerShareOfSample ?? null,
         sampling_limit: 'largest owner among the top 10 accounts; an 11th account is not observed',
         sampled_raw_units: holders.sampledRawUnits,
