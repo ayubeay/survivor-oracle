@@ -116,3 +116,64 @@ layer asking *should this autonomous action be allowed* more valuable, not less.
 
 The cheapest first step is not code. It is checking whether the terms permit what the
 architecture assumes.
+
+---
+
+## Investigation 2026-08-07 - what the account actually showed
+
+**Status change: PERSONAL R&D REACHABLE / COMMERCIAL USE BLOCKED.**
+
+Agentic Trading is live and available. Endpoint https://agent.robinhood.com/mcp/trading,
+documented for Claude Code, Claude Desktop, ChatGPT, Codex, Cursor.
+
+Authenticating the MCP walks the user into opening a dedicated Agentic brokerage account -
+it is not a login, it is an account-opening flow with a regulatory suitability
+questionnaire. Discovery therefore has a real cost.
+
+### Permission scope, from the OAuth consent screen
+    trade   Agentic account only
+    read    all accounts - positions, orders, balances, P&L, transaction history
+    manage  watchlists
+
+The read-across-all-accounts scope is what makes cross-account exposure governance
+possible. No individual agent connected to its own account can see that; a control plane
+holding the session can.
+
+### The blocker: Customer Agreement Section 29.7
+API Products may be used "solely for your own personal use and not for any other
+purposes", and Robinhood reserves the right to revoke API authorization.
+
+    personal experiment   your agent -> SURVIVOR -> Robinhood MCP -> your Agentic account
+                          consistent with what Robinhood expressly enables
+
+    commercial service    many customers -> SURVIVOR -> Robinhood
+                          NOT authorised by the current agreement
+
+Technical compatibility is not contractual permission. Offering this to others needs an
+explicit developer or commercial relationship with Robinhood, not an inference from the MCP
+being open.
+
+### review_equity_order / place_equity_order
+Robinhood exposes review and place as separate calls. That is architecturally useful:
+
+    agent proposes -> review_equity_order -> broker warnings and execution info
+    -> SURVIVOR policy -> ALLOW / THROTTLE / DEFER / DENY
+    -> if ALLOW, place_equity_order -> receipt
+
+SURVIVOR consumes the broker's own review as evidence rather than reimplementing checks the
+venue does better. Same pattern as consuming Token-2022 transfer-fee configuration instead
+of guessing at execution cost.
+
+### Architecture correction
+SURVIVOR is the MCP CLIENT, not a proxy between an agent and the MCP. Robinhood's model is
+one connection, client to server. There is no seam for a third party in the middle. The
+governed runtime authenticates, holds the session, evaluates policy and calls the tools
+itself.
+
+### First experiment, unchanged and unfunded
+Read account, portfolio and P&L. Generate shadow policy receipts. Execute nothing. Fund
+nothing. Then replace the borrowed MCP client with SURVIVOR's own implementation.
+
+### Operational note
+Account numbers, tokens and session credentials never enter this repository or any
+architecture document.
