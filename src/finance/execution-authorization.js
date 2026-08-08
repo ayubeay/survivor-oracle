@@ -76,6 +76,16 @@ function issueAuthorization({ policyReceipt, order, capability, ttlSeconds }) {
                 'snapshot. State may drift between issuance and execution; the TTL bounds ' +
                 'that window rather than closing it.',
   };
+  /* TAMPER EVIDENCE, NOT AUTHENTICITY.
+     An unkeyed digest over the canonical payload. It detects accidental or casual
+     modification and binds the fields together. An attacker able to edit the object can
+     recompute it. Within a single trusted runtime that is sufficient - the authorization
+     never leaves the process - but this must not be described as unforgeable.
+
+     Hardening path: a keyed MAC or signature over the same canonical payload adds
+     authenticity to the integrity this provides. Needed when an authorization crosses a
+     trust boundary. */
+  auth.integrity_model = 'UNKEYED_DIGEST_TRUSTED_RUNTIME_ONLY';
   auth.authorization_hash = hash(canonical(auth));
   return auth;
 }
@@ -110,7 +120,17 @@ function verifyAuthorization({ auth, order, capability, currentSnapshotId }) {
 }
 
 function consume(authId) { consumed.add(authId); }
+
+// Verification and consumption must be one step. Two async callers could otherwise both
+// verify before either consumed, and both would be permitted. Node's single-threaded
+// execution makes this synchronous block atomic; a distributed implementation would need
+// a real compare-and-set.
+function verifyAndConsume(params) {
+  const v = verifyAuthorization(params);
+  if (v.valid) consumed.add(v.authorization_id);
+  return v;
+}
 function reset() { consumed.clear(); }
 
-module.exports = { issueAuthorization, verifyAuthorization, actionFingerprint,
-                   consume, reset, AUTH_MODEL, DEFAULT_TTL_SECONDS };
+module.exports = { issueAuthorization, verifyAuthorization, verifyAndConsume,
+                   actionFingerprint, consume, reset, AUTH_MODEL, DEFAULT_TTL_SECONDS };

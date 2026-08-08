@@ -127,6 +127,24 @@ console.log('\nnothing unauthorized reaches the transport');
   t('a failed execution does not leave a reusable grant',
     after.decision === 'DENY' && after.authorization_failure === 'AUTHORIZATION_ALREADY_USED');
 
+  console.log('\nconcurrent use of one authorization');
+  reset();
+  const raced = mint();
+  const hits = [];
+  const slow = async (n, a) => { await new Promise(r => setTimeout(r, 10)); hits.push(n); return { ok: true }; };
+  const results = await Promise.allSettled([
+    guardedCall(slow, 'place_equity_order', ORDER, raced, SNAP),
+    guardedCall(slow, 'place_equity_order', ORDER, raced, SNAP),
+  ]);
+  const ok = results.filter(r => r.status === 'fulfilled').length;
+  t('exactly one concurrent attempt succeeds', ok === 1);
+  t('transport invoked once despite the race', hits.length === 1);
+
+  console.log('\nintegrity claim is stated honestly');
+  const a2 = mint();
+  t('integrity model declared', a2.integrity_model === 'UNKEYED_DIGEST_TRUSTED_RUNTIME_ONLY');
+  t('not described as unforgeable', !/unforgeable|cryptographically secure/i.test(JSON.stringify(a2)));
+
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })();

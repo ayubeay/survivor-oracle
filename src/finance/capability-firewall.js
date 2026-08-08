@@ -19,7 +19,7 @@
  * survive contact with a real server. Classes are stable where names are not.
  */
 
-const { verifyAuthorization, consume } = require('./execution-authorization');
+const { verifyAuthorization, verifyAndConsume } = require('./execution-authorization');
 
 const PHASE_0_MODEL = 'phase0-capability-firewall-v2';
 
@@ -181,9 +181,20 @@ async function guardedCall(transport, toolName, args, authorization, currentSnap
     err.receipt = check;
     throw err;
   }
-  /* Consumed BEFORE the call. If the transport throws, the authorization is still spent -
-     a failed execution must not leave a reusable grant behind. */
-  if (check.authorization_id) consume(check.authorization_id);
+  /* Re-verify AND consume atomically. checkToolCall above is advisory; this is the
+     transition that actually spends the grant. Two concurrent callers cannot both pass
+     here, and a transport failure still leaves the authorization spent - a failed
+     execution must not resurrect permission. */
+  if (check.authorization_id) {
+    const v = verifyAndConsume({ auth: authorization, order: args,
+                                 capability: toolName, currentSnapshotId });
+    if (!v.valid) {
+      const err = new Error('Blocked at consumption: ' + v.code);
+      err.receipt = { ...check, decision: 'DENY', reason: 'EXECUTION_AUTHORIZATION_INVALID',
+                      authorization_failure: v.code };
+      throw err;
+    }
+  }
   const result = await transport(toolName, args);
   return { result, receipt: { ...check, executed: true } };
 }
