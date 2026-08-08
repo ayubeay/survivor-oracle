@@ -228,3 +228,71 @@ not the intended client. Everything above came from public metadata endpoints.
 Exact tool schemas for review_equity_order and place_equity_order. Token lifetime and
 refresh behaviour. Whether tools/list differs from the public documentation. Response
 shapes for account and portfolio reads.
+
+### Correction to Finding 1 - what the metadata does and does not prove
+The earlier wording overclaimed. Published metadata establishes that Robinhood exposes a
+registration endpoint, uses authorization_code with PKCE S256, and requires no client
+secret. That is the standards-based machinery a custom client needs.
+
+It does NOT establish that arbitrary registration succeeds, that registration carries no
+conditions, or that commercial operation is authorised. The defensible statement:
+
+    Robinhood exposes the machinery required for a custom MCP client. SURVIVOR appears
+    technically capable of becoming that client, subject to successful registration and
+    applicable terms.
+
+Successful dynamic registration remains unproven until attempted.
+
+### Three boundaries, and only the first belongs to Robinhood
+    ROBINHOOD AUTHORISATION   the token may do whatever the "internal" scope permits
+    SURVIVOR CAPABILITY       which of those the runtime exposes upstream at all
+    SURVIVOR POLICY           whether this particular proposed action is admissible
+
+    Robinhood:  you MAY place trades
+    runtime:    this deployment CANNOT place trades
+    policy:     this deployment can, but THIS trade is DENIED
+
+Three different controls. Conflating them is how a system ends up describing itself as
+read-only when nothing structurally prevents writing.
+
+### Phase 0 is an allowlist, not a promise
+"Read-only" was assumed to be a broker permission. It is not - there is one scope. So
+read-only becomes a property SURVIVOR must construct rather than something it can request.
+
+The runtime rejects forbidden tool names before the request leaves the process:
+
+    agent requests place_equity_order
+      -> MCP client capability wrapper
+      -> PHASE_0_EXECUTION_DISABLED
+      -> DENY + receipt
+
+    permitted   account reads, balances, positions, P&L, order history, market data,
+                review_* where non-executing
+    forbidden   place_equity_order, place_option_order, any mutating cancel or modify,
+                watchlist mutation
+
+Even though the OAuth token carries trade authority, no usable path to exercise it exists
+through the runtime. That is a materially stronger experiment than instructing a model not
+to call something.
+
+### Next progression, still zero capital and zero mutation
+    1  attempt dynamic client registration, inspect the response
+    2  implement and verify the PKCE authorization flow
+    3  authenticate the operator's own account
+    4  store credentials outside the repository
+    5  tools/list
+    6  construct the hard Phase 0 allowlist
+    7  read account, position and P&L state
+    8  produce the first shadow governance receipt
+    9  execute nothing
+
+Failure at step 1 is itself valuable evidence.
+
+### Status
+    custom-client architecture strongly supported
+    no advertised read-only scope - confirmed
+    Claude does not need brokerage access - confirmed
+    SURVIVOR can enforce a narrower surface than OAuth grants
+    successful arbitrary registration - UNPROVEN
+    commercial authorisation - UNRESOLVED under current customer terms
+    trading and funding - NOT STARTED
