@@ -79,3 +79,52 @@ schema has not been captured, so it stays denied.
 Scanners, saved screeners, option exercise, tax lots, technical indicators, earnings
 calendars, index data and margin upgrade paths. A governance layer over this has
 considerably more to classify than buy and sell.
+
+## Observation pass results
+
+Reads are ACCOUNT-SCOPED. get_portfolio, get_equity_positions and get_realized_pnl all
+require account_number, discovered from get_accounts. Observation is a chain rooted in
+account discovery, not a flat list of calls.
+
+### Account model
+Three accounts visible: margin, cash, limited_margin. Exactly ONE carries
+agentic_allowed: true. Notably the account with option_level_2 is NOT the agentic one - so
+an agent may be authorised against an account that cannot trade options at all.
+
+agentic_allowed is Robinhood's own boundary, machine-readable. An order proposed against an
+account where it is false is malformed before any risk question arises.
+
+### Policy inputs actually available
+get_portfolio returns, in one call:
+    total_value, equity_value, options_value, futures_value, event_contracts_value,
+    crypto_value, mutual_funds_value, fixed_income_value, cash, pending_deposits, currency
+    buying_power { buying_power, unleveraged_buying_power, display_currency }
+
+That is enough for a capital-budget and cross-asset concentration policy. The asset-class
+split is more granular than assumed.
+
+get_equity_positions returns a positions array. get_accounts carries type, option_level,
+state, unsettled_funds and the agentic flag per account.
+
+### Three distinct failure modes observed
+    missing account_number    JSON-RPC error, structured
+    missing asset class       PLAIN TEXT, not JSON: "unable to fetch realized P&L: rpc
+                              error: code = InvalidArgument desc = un-specified asset class"
+    tool not permitted        blocked locally by the firewall, never reaches the wire
+
+A client assuming JSON in content[0].text will throw on the second. Tolerating non-JSON is
+required, and the text carries the actual reason.
+
+### Revocation is blind
+Every authorization run creates a separate nine-day grant. Because all custom clients share
+one client_id, the settings page cannot distinguish them - a user revoking one grant cannot
+tell which agent it belonged to.
+
+For a single experiment that is untidy. For a person running several agents it is a real gap
+in the model, and an argument for a control plane holding ONE session rather than each agent
+holding its own.
+
+### Still not done
+No cross-account aggregation yet, which is the reserve's central claim - reading all three
+accounts to see total exposure is possible and untested. No policy evaluation. No order,
+mutation, simulation or funding.
