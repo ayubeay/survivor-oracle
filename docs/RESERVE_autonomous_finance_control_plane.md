@@ -296,3 +296,21 @@ Failure at step 1 is itself valuable evidence.
     successful arbitrary registration - UNPROVEN
     commercial authorisation - UNRESOLVED under current customer terms
     trading and funding - NOT STARTED
+
+### Step 1 result, 2026-08-08 - dynamic registration succeeds
+POST to the registration endpoint with client metadata returned 200 and a client_id.
+No approval, no developer relationship, no client secret, token_endpoint_auth_method
+"none". A custom redirect_uri of http://localhost:8765/callback was accepted verbatim,
+which makes a local PKCE loopback flow possible.
+
+Two observations:
+- the submitted client_name was ignored; the response returned "Robinhood Trading". Client
+  identity is not stored per registration, so the consent screen will not name our client.
+- the client_id is a public value. It is not a secret and does not authorise anything on
+  its own; the user consent step is what grants access.
+
+Status change: successful arbitrary registration - CONFIRMED. SURVIVOR can be the MCP
+client for personal R&D use.
+
+Commercial authorisation remains unresolved under customer agreement 29.7. Registration
+being open is not permission to operate a service on behalf of others.
