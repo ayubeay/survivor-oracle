@@ -177,3 +177,54 @@ nothing. Then replace the borrowed MCP client with SURVIVOR's own implementation
 ### Operational note
 Account numbers, tokens and session credentials never enter this repository or any
 architecture document.
+
+## OAuth model, established 2026-08-08 without authenticating
+
+Unauthenticated probe of the MCP endpoint returns 401 with:
+
+    www-authenticate: Bearer resource_metadata=
+      "https://agent.robinhood.com/.well-known/oauth-protected-resource/mcp/trading"
+
+Following the discovery chain, from public metadata only:
+
+    authorization_endpoint   https://robinhood.com/oauth
+    token_endpoint           https://api.robinhood.com/oauth2/token/
+    registration_endpoint    https://agent.robinhood.com/oauth/trading/register
+    grant_types              authorization_code, refresh_token
+    code_challenge_methods   S256
+    token_endpoint_auth      none
+    scopes_supported         ["internal"]
+
+### Finding 1 - dynamic client registration is open
+A registration_endpoint exists and token endpoint auth is "none". This is a public OAuth
+client with PKCE. SURVIVOR can register itself and authenticate a user without a developer
+relationship, partnership or pre-provisioned credentials.
+
+That removes the largest architectural unknown: SURVIVOR CAN be the MCP client.
+
+### Finding 2 - there is no read-only scope
+scopes_supported is a single value, "internal". The consent screen confirms it: trade
+authority, cross-account read and watchlist management are presented as one grant with one
+Allow button. No granular selection.
+
+CONSEQUENCE: a Phase 0 observation experiment cannot be made safe by requesting a narrower
+scope. Any authenticated session carries Agentic trade authority whether or not it is used.
+
+The execution boundary must therefore be enforced entirely within SURVIVOR - by never
+calling place_equity_order - with nothing external preventing it. That is a self-imposed
+constraint, not a broker-enforced one.
+
+This is exactly the situation a control plane exists to address, and exactly why the
+control plane has to earn trust before it holds capital. The Phase 0 design stands, but its
+safety comes from our discipline rather than from scope restriction. Record that honestly
+rather than describing observation mode as read-only.
+
+### Not authenticated
+The OAuth consent screen was reached and deliberately not approved. Granting persistent
+brokerage read access to a temporary discovery client was not justified when Claude Code is
+not the intended client. Everything above came from public metadata endpoints.
+
+### Still unknown, and requires authentication to learn
+Exact tool schemas for review_equity_order and place_equity_order. Token lifetime and
+refresh behaviour. Whether tools/list differs from the public documentation. Response
+shapes for account and portfolio reads.
