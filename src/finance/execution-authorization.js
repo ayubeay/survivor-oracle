@@ -22,7 +22,31 @@
 
 const crypto = require('crypto');
 
-const AUTH_MODEL = 'survivor-execution-authorization-v1';
+const AUTH_MODEL = 'survivor-execution-authorization-v2';
+
+/* A policy receipt is EVIDENCE - it says what was evaluated and what was concluded.
+   An execution authorization is AUTHORITY - it says this capability may be exercised, for
+   this action, against this state, until this expiry, once.
+   Only the second is signed. Signing evidence would suggest the judgment is authoritative;
+   it is not, it is a judgment. */
+
+/* Ed25519 governor key. Ephemeral per process by default - a restart invalidates every
+   outstanding authorization, which is the safe direction. A persistent key belongs in a
+   keystore, not a repository, and is only needed once authorizations cross a trust
+   boundary. */
+let governorKey = null;
+function governor() {
+  if (!governorKey) {
+    governorKey = crypto.generateKeyPairSync('ed25519');
+    governorKey.publicKeyPem = governorKey.publicKey.export({ type: 'spki', format: 'pem' });
+    governorKey.keyId = hash(governorKey.publicKeyPem).slice(0, 16);
+  }
+  return governorKey;
+}
+function governorIdentity() {
+  const g = governor();
+  return { key_id: g.keyId, public_key_pem: g.publicKeyPem, algorithm: 'ed25519' };
+}
 const DEFAULT_TTL_SECONDS = 30;
 
 /* Consumed authorizations. In-process only - a restart invalidates everything, which is
@@ -85,8 +109,17 @@ function issueAuthorization({ policyReceipt, order, capability, ttlSeconds }) {
      Hardening path: a keyed MAC or signature over the same canonical payload adds
      authenticity to the integrity this provides. Needed when an authorization crosses a
      trust boundary. */
-  auth.integrity_model = 'UNKEYED_DIGEST_TRUSTED_RUNTIME_ONLY';
-  auth.authorization_hash = hash(canonical(auth));
+  /* Signed, not merely hashed. An unkeyed digest binds the fields together and detects
+     casual modification; anyone able to edit the object can recompute it. A signature over
+     the same canonical payload makes the authorization attributable to the governor that
+     issued it, so a forged or edited authorization fails verification rather than simply
+     looking consistent. */
+  const g = governor();
+  auth.integrity_model = 'ED25519_SIGNED_BY_EXECUTION_GOVERNOR';
+  auth.governor_key_id = g.keyId;
+  const payload = canonical(auth);
+  auth.signature = crypto.sign(null, Buffer.from(payload), g.privateKey).toString('base64');
+  auth.signed_payload_hash = hash(payload);
   return auth;
 }
 
@@ -99,12 +132,24 @@ function verifyAuthorization({ auth, order, capability, currentSnapshotId }) {
   if (!auth || typeof auth !== 'object') return bad('NO_AUTHORIZATION', 'none supplied');
   if (auth.model_version !== AUTH_MODEL) return bad('UNKNOWN_AUTHORIZATION_MODEL', auth.model_version);
 
-  /* Detects a hand-edited authorization: the hash covers every other field. */
-  const claimed = auth.authorization_hash;
-  const recomputed = hash(canonical(Object.assign({}, auth, { authorization_hash: undefined })));
-  const withoutHash = {};
-  Object.keys(auth).forEach(k => { if (k !== 'authorization_hash') withoutHash[k] = auth[k]; });
-  if (claimed !== hash(canonical(withoutHash))) return bad('AUTHORIZATION_TAMPERED', 'hash mismatch');
+  /* Signature covers every field except the signature and the payload hash themselves.
+     An edited field, a forged authorization, or one signed by a different key all fail
+     here - not merely an inconsistent digest. */
+  if (!auth.signature) return bad('AUTHORIZATION_UNSIGNED', 'no signature present');
+  const unsigned = {};
+  Object.keys(auth).forEach(k => {
+    if (k !== 'signature' && k !== 'signed_payload_hash') unsigned[k] = auth[k];
+  });
+  const payload = canonical(unsigned);
+  let sigOk = false;
+  try {
+    sigOk = crypto.verify(null, Buffer.from(payload),
+                          governor().publicKey, Buffer.from(auth.signature, 'base64'));
+  } catch (e) { sigOk = false; }
+  if (!sigOk) return bad('AUTHORIZATION_SIGNATURE_INVALID',
+    'not signed by this execution governor, or the payload was altered after signing');
+  if (auth.governor_key_id !== governor().keyId)
+    return bad('AUTHORIZATION_FOREIGN_GOVERNOR', auth.governor_key_id);
 
   if (consumed.has(auth.authorization_id)) return bad('AUTHORIZATION_ALREADY_USED', auth.authorization_id);
   if (Date.now() > new Date(auth.expires_at).getTime())
@@ -132,5 +177,21 @@ function verifyAndConsume(params) {
 }
 function reset() { consumed.clear(); }
 
+/* ISSUED -> VERIFIED -> CONSUMED, with terminal states for everything else. A consumer
+   should be able to ask what happened to an authorization, not only whether it worked. */
+const STATES = ['ISSUED', 'VERIFIED', 'CONSUMED', 'EXPIRED', 'INVALIDATED_BY_DRIFT', 'REJECTED'];
+function authorizationState(auth, verification) {
+  if (!verification) return 'ISSUED';
+  if (verification.valid) return consumed.has(auth.authorization_id) ? 'CONSUMED' : 'VERIFIED';
+  /* An authorization that was used is CONSUMED, not REJECTED. Its terminal state is the
+     thing a consumer most needs to distinguish from a forgery - "this already worked" and
+     "this was never valid" are different answers. */
+  if (verification.code === 'AUTHORIZATION_ALREADY_USED') return 'CONSUMED';
+  if (verification.code === 'AUTHORIZATION_EXPIRED') return 'EXPIRED';
+  if (verification.code === 'SNAPSHOT_DRIFT') return 'INVALIDATED_BY_DRIFT';
+  return 'REJECTED';
+}
+
 module.exports = { issueAuthorization, verifyAuthorization, verifyAndConsume,
-                   actionFingerprint, consume, reset, AUTH_MODEL, DEFAULT_TTL_SECONDS };
+                   actionFingerprint, consume, reset, authorizationState, governorIdentity,
+                   AUTH_MODEL, DEFAULT_TTL_SECONDS, STATES };

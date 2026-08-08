@@ -56,13 +56,11 @@ t('first use permitted', t1.decision === 'ALLOW');
 t('replay rejected', t2.decision === 'DENY' && t2.authorization_failure === 'AUTHORIZATION_ALREADY_USED');
 
 reset();
-const expired = mint();
-expired.expires_at = new Date(Date.now() - 1000).toISOString();
-expired.authorization_hash = undefined;
-const { actionFingerprint } = require('./execution-authorization');
-r = checkToolCall('place_equity_order', ORDER, expired, SNAP);
-t('tampering to extend expiry is caught', r.decision === 'DENY' &&
-  ['AUTHORIZATION_TAMPERED','AUTHORIZATION_EXPIRED'].indexOf(r.authorization_failure) !== -1);
+const extended = mint();
+extended.expires_at = new Date(Date.now() + 86400000).toISOString();
+r = checkToolCall('place_equity_order', ORDER, extended, SNAP);
+t('extending expiry breaks the signature', r.decision === 'DENY' &&
+  r.authorization_failure === 'AUTHORIZATION_SIGNATURE_INVALID');
 
 reset();
 const short = issueAuthorization({ policyReceipt: ALLOW_RECEIPT, order: ORDER,
@@ -74,7 +72,8 @@ reset();
 const tampered = mint();
 tampered.action_summary.notional_usd = 99999;
 r = checkToolCall('place_equity_order', ORDER, tampered, SNAP);
-t('edited authorization rejected', r.decision === 'DENY' && r.authorization_failure === 'AUTHORIZATION_TAMPERED');
+t('edited authorization rejected', r.decision === 'DENY' &&
+  r.authorization_failure === 'AUTHORIZATION_SIGNATURE_INVALID');
 
 reset();
 r = checkToolCall('place_equity_order', ORDER, mint(), 'snapshot_changed_since');
@@ -142,8 +141,50 @@ console.log('\nnothing unauthorized reaches the transport');
 
   console.log('\nintegrity claim is stated honestly');
   const a2 = mint();
-  t('integrity model declared', a2.integrity_model === 'UNKEYED_DIGEST_TRUSTED_RUNTIME_ONLY');
-  t('not described as unforgeable', !/unforgeable|cryptographically secure/i.test(JSON.stringify(a2)));
+  t('signed by the governor', a2.integrity_model === 'ED25519_SIGNED_BY_EXECUTION_GOVERNOR');
+  t('carries a signature', typeof a2.signature === 'string' && a2.signature.length > 40);
+  t('names the issuing key', typeof a2.governor_key_id === 'string');
+
+  console.log('\nauthority vs evidence');
+  t('the policy receipt is not signed', ALLOW_RECEIPT.signature === undefined);
+  t('the authorization is', a2.signature !== undefined);
+
+  console.log('\nforgery');
+  const { governorIdentity, authorizationState, verifyAuthorization } = require('./execution-authorization');
+  const forged = JSON.parse(JSON.stringify(a2));
+  forged.action_summary.notional_usd = 99999;
+  forged.action_fingerprint = require('./execution-authorization')
+    .actionFingerprint(Object.assign({}, ORDER, { notional_usd: 99999 }));
+  let f = checkToolCall('place_equity_order', Object.assign({}, ORDER, { notional_usd: 99999 }), forged, SNAP);
+  t('rebuilding the fingerprint does not help without the key',
+    f.decision === 'DENY' && f.authorization_failure === 'AUTHORIZATION_SIGNATURE_INVALID');
+
+  const unsigned = JSON.parse(JSON.stringify(a2));
+  delete unsigned.signature;
+  f = checkToolCall('place_equity_order', ORDER, unsigned, SNAP);
+  t('unsigned authorization rejected', f.authorization_failure === 'AUTHORIZATION_UNSIGNED');
+
+  console.log('\nstate machine');
+  reset();
+  const sm = mint();
+  t('starts ISSUED', authorizationState(sm, null) === 'ISSUED');
+  t('VERIFIED before consumption', authorizationState(sm, verifyAuthorization(
+    { auth: sm, order: ORDER, capability: 'place_equity_order', currentSnapshotId: SNAP })) === 'VERIFIED');
+  require('./execution-authorization').consume(sm.authorization_id);
+  t('CONSUMED after use', authorizationState(sm, verifyAuthorization(
+    { auth: sm, order: ORDER, capability: 'place_equity_order', currentSnapshotId: SNAP })) === 'CONSUMED');
+  const junk = mint(); junk.signature = 'nonsense';
+  t('REJECTED is reserved for genuinely invalid', authorizationState(junk, verifyAuthorization(
+    { auth: junk, order: ORDER, capability: 'place_equity_order', currentSnapshotId: SNAP })) === 'REJECTED');
+  const drifted = mint();
+  t('INVALIDATED_BY_DRIFT on snapshot change', authorizationState(drifted, verifyAuthorization(
+    { auth: drifted, order: ORDER, capability: 'place_equity_order', currentSnapshotId: 'other' })) === 'INVALIDATED_BY_DRIFT');
+
+  console.log('\ngovernor identity');
+  const gid = governorIdentity();
+  t('key id exposed', typeof gid.key_id === 'string');
+  t('public key exposed', /BEGIN PUBLIC KEY/.test(gid.public_key_pem));
+  t('algorithm named', gid.algorithm === 'ed25519');
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
