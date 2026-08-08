@@ -154,7 +154,8 @@ firewall is the control.
 
 ## 5. Properties under test
 
-More informative than a count:
+Counts from the tree as of this document: capability-firewall 38, execution-authorization
+46, policy 30, robinhood-auth and client 22. The properties matter more than the total:
 
     unknown tools denied by default
     every mutating tool denied without authorization
