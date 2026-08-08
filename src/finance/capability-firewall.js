@@ -11,78 +11,149 @@
  *     OAuth grants:            READ + TRADE + MUTATE
  *     this runtime exposes:    READ
  *     agent-visible surface:   READ
+ *
+ * Classification is by CAPABILITY CLASS, not by name. The first version used a hand-written
+ * allowlist and 43 of 54 live tools fell through unclassified - get_positions did not
+ * exist, get_pnl did not exist, and two mutating tools nobody anticipated (exercise_option,
+ * cancel_option_exercise) sat in the unclassified pile. Names invented in advance do not
+ * survive contact with a real server. Classes are stable where names are not.
  */
 
-const PHASE_0_MODEL = 'phase0-capability-firewall-v1';
+const PHASE_0_MODEL = 'phase0-capability-firewall-v2';
 
-/* Observation-only. A tool must be named here to be callable at all. */
-const PHASE_0_ALLOW = new Set([
-  'get_account_details',
-  'get_portfolio',
-  'get_positions',
-  'get_buying_power',
-  'get_pnl',
-  'get_orders',
-  'get_order_history',
-  'get_watchlists',
-  'get_quote',
-  'get_quotes',
-  'get_historical_data',
-  'get_market_data',
-  'search_instruments',
-]);
-
-/* Named explicitly so a denial can state WHY rather than only that the tool was unlisted. */
-const KNOWN_MUTATING = {
-  place_equity_order:  'ORDER_PLACEMENT',
-  place_option_order:  'ORDER_PLACEMENT',
-  cancel_equity_order: 'ORDER_MUTATION',
-  cancel_option_order: 'ORDER_MUTATION',
-  replace_equity_order:'ORDER_MUTATION',
-  modify_equity_order: 'ORDER_MUTATION',
-  create_watchlist:    'WATCHLIST_MUTATION',
-  update_watchlist:    'WATCHLIST_MUTATION',
-  delete_watchlist:    'WATCHLIST_MUTATION',
-  add_to_watchlist:    'WATCHLIST_MUTATION',
+/* Capability classes. A tool belongs to exactly one. */
+const CLASS = {
+  OBSERVE_ACCOUNT: 'OBSERVE_ACCOUNT',             // this account's holdings, orders, P&L
+  OBSERVE_MARKET: 'OBSERVE_MARKET',               // public prices and instrument data
+  OBSERVE_HISTORY: 'OBSERVE_HISTORY',             // historical bars and past events
+  ANALYZE: 'ANALYZE',                             // derived computation over market data
+  DISCOVERY: 'DISCOVERY',                         // search and instrument resolution
+  SIMULATE: 'SIMULATE',                           // order preview without placement
+  MUTATE_METADATA: 'MUTATE_METADATA',             // watchlists, scanners - no capital effect
+  MUTATE_ORDER: 'MUTATE_ORDER',                   // places, cancels or replaces orders
+  EXERCISE_DERIVATIVE: 'EXERCISE_DERIVATIVE',     // option exercise and its cancellation
+  ACCOUNT_CONFIGURATION: 'ACCOUNT_CONFIGURATION', // margin and options-level upgrades
+  UNKNOWN: 'UNKNOWN',
 };
 
-/* review_* is DENIED in phase 0 despite appearing non-executing.
- * Robinhood documents review and place as separate calls, which suggests review does not
- * transmit an order - but "suggests" is not "established". It stays denied until live
- * inspection confirms its semantics. Assuming a tool is safe because its name sounds safe
- * is the error this whole layer exists to prevent. */
-const PENDING_CLASSIFICATION = {
-  review_equity_order: 'SEMANTICS_UNVERIFIED',
-  review_option_order: 'SEMANTICS_UNVERIFIED',
+/* Phase 0 posture per class. Adding a tool never changes this; classifying one does. */
+const PHASE_0_POSTURE = {
+  OBSERVE_ACCOUNT: 'ALLOW',
+  OBSERVE_MARKET: 'ALLOW',
+  OBSERVE_HISTORY: 'ALLOW',
+  DISCOVERY: 'ALLOW',
+  ANALYZE: 'ALLOW',
+  SIMULATE: 'DENY',                 // review_* self-describes as non-placing; schema not
+                                    // yet captured, so it stays denied until promoted
+  MUTATE_METADATA: 'DENY',
+  MUTATE_ORDER: 'DENY',
+  EXERCISE_DERIVATIVE: 'DENY',
+  ACCOUNT_CONFIGURATION: 'DENY',
+  UNKNOWN: 'DENY',
 };
+
+/* Classified against the live surface returned by tools/list on 2026-08-08, v1.1.1. */
+const TOOL_CLASS = {
+  // account observation
+  get_accounts: CLASS.OBSERVE_ACCOUNT,
+  get_portfolio: CLASS.OBSERVE_ACCOUNT,
+  get_equity_positions: CLASS.OBSERVE_ACCOUNT,
+  get_option_positions: CLASS.OBSERVE_ACCOUNT,
+  get_equity_orders: CLASS.OBSERVE_ACCOUNT,
+  get_option_orders: CLASS.OBSERVE_ACCOUNT,
+  get_equity_tax_lots: CLASS.OBSERVE_ACCOUNT,
+  get_realized_pnl: CLASS.OBSERVE_ACCOUNT,
+  get_pnl_trade_history: CLASS.OBSERVE_ACCOUNT,
+  get_watchlists: CLASS.OBSERVE_ACCOUNT,
+  get_watchlist_items: CLASS.OBSERVE_ACCOUNT,
+  get_option_watchlist: CLASS.OBSERVE_ACCOUNT,
+  get_scans: CLASS.OBSERVE_ACCOUNT,
+
+  // market observation
+  get_equity_quotes: CLASS.OBSERVE_MARKET,
+  get_equity_price_book: CLASS.OBSERVE_MARKET,
+  get_equity_fundamentals: CLASS.OBSERVE_MARKET,
+  get_equity_tradability: CLASS.OBSERVE_MARKET,
+  get_option_quotes: CLASS.OBSERVE_MARKET,
+  get_option_chains: CLASS.OBSERVE_MARKET,
+  get_option_instruments: CLASS.OBSERVE_MARKET,
+  get_index_quotes: CLASS.OBSERVE_MARKET,
+  get_indexes: CLASS.OBSERVE_MARKET,
+  get_financials: CLASS.OBSERVE_MARKET,
+  get_popular_watchlists: CLASS.OBSERVE_MARKET,
+  get_scanner_filter_specs: CLASS.OBSERVE_MARKET,
+
+  // historical
+  get_equity_historicals: CLASS.OBSERVE_HISTORY,
+  get_option_historicals: CLASS.OBSERVE_HISTORY,
+  get_index_historicals: CLASS.OBSERVE_HISTORY,
+  get_earnings_calendar: CLASS.OBSERVE_HISTORY,
+  get_earnings_results: CLASS.OBSERVE_HISTORY,
+
+  // derived computation
+  get_equity_technical_indicators: CLASS.ANALYZE,
+  run_scan: CLASS.ANALYZE,
+
+  // discovery
+  search: CLASS.DISCOVERY,
+
+  // simulation
+  review_equity_order: CLASS.SIMULATE,
+  review_option_order: CLASS.SIMULATE,
+
+  // metadata mutation - no capital effect, still denied in phase 0
+  create_watchlist: CLASS.MUTATE_METADATA,
+  update_watchlist: CLASS.MUTATE_METADATA,
+  add_to_watchlist: CLASS.MUTATE_METADATA,
+  remove_from_watchlist: CLASS.MUTATE_METADATA,
+  add_option_to_watchlist: CLASS.MUTATE_METADATA,
+  remove_option_from_watchlist: CLASS.MUTATE_METADATA,
+  follow_watchlist: CLASS.MUTATE_METADATA,
+  unfollow_watchlist: CLASS.MUTATE_METADATA,
+  create_scan: CLASS.MUTATE_METADATA,
+  update_scan_config: CLASS.MUTATE_METADATA,
+  update_scan_filters: CLASS.MUTATE_METADATA,
+
+  // capital effect
+  place_equity_order: CLASS.MUTATE_ORDER,
+  place_option_order: CLASS.MUTATE_ORDER,
+  cancel_equity_order: CLASS.MUTATE_ORDER,
+  cancel_option_order: CLASS.MUTATE_ORDER,
+
+  // derivative exercise - neither of these was anticipated before the live listing
+  exercise_option: CLASS.EXERCISE_DERIVATIVE,
+  cancel_option_exercise: CLASS.EXERCISE_DERIVATIVE,
+
+  // account configuration
+  get_limited_margin_upgrade_info: CLASS.ACCOUNT_CONFIGURATION,
+  get_option_level_upgrade_info: CLASS.ACCOUNT_CONFIGURATION,
+};
+
+function classify(toolName) {
+  if (typeof toolName !== 'string' || !toolName) return CLASS.UNKNOWN;
+  return TOOL_CLASS[toolName] || CLASS.UNKNOWN;
+}
 
 function checkToolCall(toolName, args) {
   const at = new Date().toISOString();
-  const base = { model_version: PHASE_0_MODEL, tool: toolName, checked_at: at };
+  const cls = classify(toolName);
+  const posture = PHASE_0_POSTURE[cls] || 'DENY';
+  const base = { model_version: PHASE_0_MODEL, tool: toolName, capability_class: cls,
+                 phase_0_posture: posture, checked_at: at };
 
-  if (typeof toolName !== 'string' || !toolName) {
-    return { ...base, decision: 'DENY', reason: 'INVALID_TOOL_NAME' };
+  if (cls === CLASS.UNKNOWN) {
+    return { ...base, decision: 'DENY', reason: 'PHASE_0_UNCLASSIFIED_DEFAULT_DENY',
+             note: 'Not classified against the observed capability surface. Classify before use.' };
   }
-  if (PHASE_0_ALLOW.has(toolName)) {
-    return { ...base, decision: 'ALLOW', reason: 'OBSERVATION_ONLY_TOOL' };
+  if (posture === 'ALLOW') {
+    return { ...base, decision: 'ALLOW', reason: 'CLASS_PERMITTED_IN_PHASE_0' };
   }
-  if (KNOWN_MUTATING[toolName]) {
-    return { ...base, decision: 'DENY', reason: 'PHASE_0_MUTATION_DISABLED',
-             category: KNOWN_MUTATING[toolName],
-             note: 'The OAuth token permits this. This runtime does not expose it.' };
-  }
-  if (PENDING_CLASSIFICATION[toolName]) {
-    return { ...base, decision: 'DENY', reason: 'PHASE_0_PENDING_CLASSIFICATION',
-             category: PENDING_CLASSIFICATION[toolName],
-             note: 'Denied until live inspection establishes whether this mutates state.' };
-  }
-  /* Unknown tools default DENY. A tool Robinhood adds tomorrow must not become callable
-     because nobody listed it. */
-  return { ...base, decision: 'DENY', reason: 'PHASE_0_UNKNOWN_TOOL_DEFAULT_DENY',
-           note: 'Not on the observation allowlist. Unlisted tools are denied by default.' };
+  return { ...base, decision: 'DENY', reason: 'PHASE_0_CLASS_DENIED',
+           note: cls === CLASS.SIMULATE
+             ? 'review_* self-describes as non-placing but its schema has not been captured. Denied until separately promoted.'
+             : 'The OAuth token permits this. This runtime does not expose it.' };
 }
 
-/* The only path to the transport. Anything reaching the wire passes through here. */
 async function guardedCall(transport, toolName, args) {
   const check = checkToolCall(toolName, args);
   if (check.decision !== 'ALLOW') {
@@ -94,21 +165,31 @@ async function guardedCall(transport, toolName, args) {
   return { result, receipt: { ...check, executed: true } };
 }
 
-/* Tools the live server offers that we have never classified - surfaced rather than
-   silently denied, so the gap is visible instead of invisible. */
-function auditToolList(liveToolNames) {
-  const unclassified = liveToolNames.filter(n =>
-    !PHASE_0_ALLOW.has(n) && !KNOWN_MUTATING[n] && !PENDING_CLASSIFICATION[n]);
+/* A capability surface receipt. If the server grows from 54 tools to 58, the four new ones
+   are UNKNOWN and therefore denied - drift is visible rather than silently absorbed. */
+function auditToolList(liveToolNames, serverInfo) {
+  const byClass = {};
+  liveToolNames.forEach(n => {
+    const c = classify(n);
+    (byClass[c] = byClass[c] || []).push(n);
+  });
+  const unknown = byClass[CLASS.UNKNOWN] || [];
   return {
     model_version: PHASE_0_MODEL,
-    live_tool_count: liveToolNames.length,
-    allowed: liveToolNames.filter(n => PHASE_0_ALLOW.has(n)),
-    known_mutating: liveToolNames.filter(n => KNOWN_MUTATING[n]),
-    pending: liveToolNames.filter(n => PENDING_CLASSIFICATION[n]),
-    unclassified,
-    all_unclassified_default_deny: true,
+    server: (serverInfo && serverInfo.name) || null,
+    server_version: (serverInfo && serverInfo.version) || null,
+    tools_observed: liveToolNames.length,
+    classified: liveToolNames.length - unknown.length,
+    unclassified: unknown.length,
+    unclassified_tools: unknown,
+    by_class: byClass,
+    allowed_now: liveToolNames.filter(n => PHASE_0_POSTURE[classify(n)] === 'ALLOW'),
+    denied_now: liveToolNames.filter(n => PHASE_0_POSTURE[classify(n)] !== 'ALLOW'),
+    unknown_default_policy: 'DENY',
+    mutation_enabled: false,
+    credential_persisted: false,
   };
 }
 
-module.exports = { checkToolCall, guardedCall, auditToolList,
-                   PHASE_0_ALLOW, KNOWN_MUTATING, PENDING_CLASSIFICATION, PHASE_0_MODEL };
+module.exports = { checkToolCall, guardedCall, auditToolList, classify,
+                   CLASS, PHASE_0_POSTURE, TOOL_CLASS, PHASE_0_MODEL };
