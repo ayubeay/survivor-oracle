@@ -338,3 +338,39 @@ public client. Custom clients are supported; custom client IDENTITY is not.
 First authorize attempt timed out after 180s. The authorize URL routed to the Agentic
 account page rather than a consent screen, so no callback arrived. Added scope=internal as
 the next hypothesis; unverified.
+
+## Phase 0 complete - 2026-08-08
+
+Evidence collection is done. Everything below was observed, not inferred.
+
+    auth          SURVIVOR authenticates itself via shared public client + PKCE,
+                  scope=internal required, nine-day tokens, nothing persisted
+    surface       54 tools, all classified by capability class, 33 allowed / 21 denied,
+                  unclassified defaults DENY so capability drift is visible
+    reads         account-scoped, chained through get_accounts; three distinct failure
+                  modes (JSON-RPC error, plain-text error, local firewall block)
+    aggregation   cross-account portfolio and symbol exposure, sanitised aliases,
+                  no identifier printed or persisted
+
+Tests: 38 firewall, 22 auth and client. No order, mutation, simulation, exercise or funding
+at any point.
+
+### Corrections made along the way, worth remembering
+- "dynamic registration" is a fixed shared client, not per-client identity
+- a truncated tool description is evidence, not proof of semantics
+- cross-account VISIBILITY is Robinhood's grant, not SURVIVOR's capability. The
+  contribution is aggregation plus deterministic policy over that visibility.
+- the guessed allowlist got 43 of 54 names wrong; classes survived where names did not
+
+### One input that will need care
+buying_power on the margin account read -196.6 against a cash balance of -49.15 - margin
+leverage applied to a negative balance. Any policy comparing notional against buying power
+must handle sign. A naive "is there buying power" check reads a negative number as a
+number.
+
+### Next, and it is not more probing
+Design the finance policy semantics: what a capital budget, a concentration limit, a
+correlation check and an order-velocity limit actually mean, expressed against the inputs
+now known to exist. Then shadow them against real state.
+
+Phase 0 answered what Robinhood provides. Phase 1 asks what we should do with it.
