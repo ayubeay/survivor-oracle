@@ -105,7 +105,19 @@ async function scoreNewToken(mintAddress) {
 }
 
 async function pollPumpFun() {
-  console.log('[SURVIVOR] Polling pump.fun for new tokens...');
+  /* Off by default. At a 15s interval this makes roughly 1,400 RPC calls an hour before
+     any scoring, and pump.fun launches constantly so most ticks trigger a full score too -
+     mint info, holder distribution with retries, transfer control, liquidity. It exhausted
+     the Helius quota, which then broke on-demand scoring: the thing that is actually used.
+
+     The feed it populates has no readers. Set MONITOR_ENABLED=true to run it. */
+  if (process.env.MONITOR_ENABLED !== 'true') {
+    console.log('[SURVIVOR] Monitor DISABLED (set MONITOR_ENABLED=true to poll pump.fun).');
+    console.log('[SURVIVOR] On-demand scoring is unaffected.');
+    return;
+  }
+  var intervalMs = parseInt(process.env.MONITOR_INTERVAL_MS || '60000', 10);
+  console.log('[SURVIVOR] Polling pump.fun every ' + (intervalMs / 1000) + 's...');
   var lastSignature = null;
 
   setInterval(async function () {
@@ -137,7 +149,7 @@ async function pollPumpFun() {
     } catch (error) {
       console.error('[SURVIVOR] Poll error: ' + error.message);
     }
-  }, 15000);
+  }, intervalMs);
 }
 
 async function startMonitor(mode) {
