@@ -19,6 +19,8 @@
  * survive contact with a real server. Classes are stable where names are not.
  */
 
+const { verifyAuthorization, consume } = require('./execution-authorization');
+
 const PHASE_0_MODEL = 'phase0-capability-firewall-v2';
 
 /* Capability classes. A tool belongs to exactly one. */
@@ -46,7 +48,7 @@ const PHASE_0_POSTURE = {
   SIMULATE: 'DENY',                 // review_* self-describes as non-placing; schema not
                                     // yet captured, so it stays denied until promoted
   MUTATE_METADATA: 'DENY',
-  MUTATE_ORDER: 'DENY',
+  MUTATE_ORDER: 'DENY_BY_DEFAULT_ALLOW_ONLY_WITH_VALID_EXECUTION_AUTHORIZATION',
   EXERCISE_DERIVATIVE: 'DENY',
   ACCOUNT_CONFIGURATION: 'DENY',
   UNKNOWN: 'DENY',
@@ -134,7 +136,7 @@ function classify(toolName) {
   return TOOL_CLASS[toolName] || CLASS.UNKNOWN;
 }
 
-function checkToolCall(toolName, args) {
+function checkToolCall(toolName, args, authorization, currentSnapshotId) {
   const at = new Date().toISOString();
   const cls = classify(toolName);
   const posture = PHASE_0_POSTURE[cls] || 'DENY';
@@ -148,19 +150,40 @@ function checkToolCall(toolName, args) {
   if (posture === 'ALLOW') {
     return { ...base, decision: 'ALLOW', reason: 'CLASS_PERMITTED_IN_PHASE_0' };
   }
+  /* MUTATE_ORDER is never generally permitted. It becomes reachable only for one exact
+     action carrying a valid, unexpired, unused execution authorization - and closes again
+     immediately. The absence of an authorization is the normal case. */
+  if (posture === 'DENY_BY_DEFAULT_ALLOW_ONLY_WITH_VALID_EXECUTION_AUTHORIZATION') {
+    if (!authorization) {
+      return { ...base, decision: 'DENY', reason: 'NO_EXECUTION_AUTHORIZATION',
+               note: 'Capital-moving capability. Denied unless an execution authorization ' +
+                     'binds this exact action.' };
+    }
+    const v = verifyAuthorization({ auth: authorization, order: args,
+                                    capability: toolName, currentSnapshotId });
+    if (!v.valid) {
+      return { ...base, decision: 'DENY', reason: 'EXECUTION_AUTHORIZATION_INVALID',
+               authorization_failure: v.code, detail: v.detail };
+    }
+    return { ...base, decision: 'ALLOW', reason: 'VALID_EXECUTION_AUTHORIZATION',
+             authorization_id: v.authorization_id, single_use: true };
+  }
   return { ...base, decision: 'DENY', reason: 'PHASE_0_CLASS_DENIED',
            note: cls === CLASS.SIMULATE
              ? 'review_* self-describes as non-placing but its schema has not been captured. Denied until separately promoted.'
              : 'The OAuth token permits this. This runtime does not expose it.' };
 }
 
-async function guardedCall(transport, toolName, args) {
-  const check = checkToolCall(toolName, args);
+async function guardedCall(transport, toolName, args, authorization, currentSnapshotId) {
+  const check = checkToolCall(toolName, args, authorization, currentSnapshotId);
   if (check.decision !== 'ALLOW') {
     const err = new Error('Blocked by phase 0 capability firewall: ' + check.reason);
     err.receipt = check;
     throw err;
   }
+  /* Consumed BEFORE the call. If the transport throws, the authorization is still spent -
+     a failed execution must not leave a reusable grant behind. */
+  if (check.authorization_id) consume(check.authorization_id);
   const result = await transport(toolName, args);
   return { result, receipt: { ...check, executed: true } };
 }
