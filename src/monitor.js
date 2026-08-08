@@ -154,6 +154,15 @@ async function pollPumpFun() {
 
 async function startMonitor(mode) {
   monitorStartedAt = Date.now();
+  /* Check before announcing. Logging "Monitor starting" and then silently returning is the
+     same class of dishonesty as a health endpoint reporting OK on a broken dependency. */
+  if (process.env.MONITOR_ENABLED !== 'true') {
+    console.log('');
+    console.log('SURVIVOR Monitor DISABLED. On-demand scoring is unaffected.');
+    console.log('Set MONITOR_ENABLED=true to poll pump.fun.');
+    console.log('');
+    return;
+  }
   console.log('');
   console.log('SURVIVOR Monitor starting (mode: ' + (mode || 'poll') + ')...');
   console.log('Watching: pump.fun (' + PUMP_FUN_PROGRAM.toString().slice(0, 16) + '...)');
