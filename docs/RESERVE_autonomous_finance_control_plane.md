@@ -314,3 +314,27 @@ client for personal R&D use.
 
 Commercial authorisation remains unresolved under customer agreement 29.7. Registration
 being open is not permission to operate a service on behalf of others.
+
+### Correction 2026-08-08 - registration is not dynamic
+Two identical registration requests returned the SAME client_id
+(LtLiNmbs9owbYfWgBlC68Z2VujIPuvGoAiSYr8xW). The endpoint is RFC 7591-shaped but returns one
+fixed public client to every caller. Nothing is created.
+
+That explains the normalised client_name: there is no per-registration identity to store.
+
+Consequences:
+- a custom client still works - PKCE binds the authorization to the caller's session, so a
+  shared client_id is not itself a vulnerability
+- but Robinhood CANNOT distinguish SURVIVOR from Claude Code from any other custom client.
+  Every non-partner client is the same client.
+- the consent screen will never name our client, and the Agentic account's connected-agents
+  list cannot attribute a connection to a specific custom runtime
+
+The earlier status line "successful arbitrary registration - CONFIRMED" was wrong. The
+correct statement: the endpoint accepts any registration request and returns a shared
+public client. Custom clients are supported; custom client IDENTITY is not.
+
+### Authorization flow: unresolved
+First authorize attempt timed out after 180s. The authorize URL routed to the Agentic
+account page rather than a consent screen, so no callback arrived. Added scope=internal as
+the next hypothesis; unverified.

@@ -95,6 +95,7 @@ async function authorize(opts) {
   const url = AUTHORIZE_URL + '?' + new URLSearchParams({
     client_id: cid, response_type: 'code', redirect_uri: REDIRECT_URI,
     code_challenge: challenge, code_challenge_method: 'S256', state: state,
+    scope: 'internal',
   }).toString();
 
   console.log('\n[auth] Open this URL to authorize SURVIVOR:\n' + url + '\n');
