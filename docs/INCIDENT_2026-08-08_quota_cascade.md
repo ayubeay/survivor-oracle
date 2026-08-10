@@ -51,3 +51,55 @@ running.
 
 ## Not fixed
 Quota exhausted until reset. No code recovers it.
+
+## Resolution and correction - 2026-08-09
+
+Replaced the exhausted RPC endpoint with a healthy provider. One environment variable, read
+in two files.
+
+Observed immediately afterward:
+
+    SURVIVOR production      BONK 67, coverage 65% - scoring restored
+    OROS /events with mint   ~8.40s -> ~5.75s
+    OROS /events no mint     ~0.87s
+    MomentumSniper           one OROS timeout at 00:02:13 after log rotation
+
+### What is established
+The exhausted RPC was a real contributor but NOT the entire source of mint-path latency.
+Restoring capacity removed roughly 2.6 seconds. Roughly 4.9 seconds still separates the
+no-mint and mint-bearing requests.
+
+Corrected causal model:
+
+    existing expensive mint/scoring path
+      + shared RPC quota exhausted by unnecessary background polling
+      -> reduced latency headroom
+      -> downstream governance requests more likely to exceed the 12s timeout
+
+That is a more useful finding than "the poller broke everything." The expensive path existed
+first; the quota exhaustion removed the headroom that was hiding it.
+
+### What is NOT established
+MomentumSniper failure-rate recovery. The current log has run for minutes. One failure since
+midnight cannot be meaningfully compared with 148 across a full day, and the earlier draft of
+this section made exactly that comparison. Corrected.
+
+### Still open
+1. Measure the MomentumSniper OROS timeout rate over a meaningful post-fix window.
+2. Break down the ~4.9s incremental mint-path latency by stage.
+3. Determine which scoring and RPC operations are sequential and which can safely run
+   concurrently.
+4. Classify hard quota exhaustion separately from transient rate limiting, so retries do
+   not add useless delay against a limit that will not clear.
+5. Introduce dependency budgets so background discovery cannot consume capacity reserved
+   for control-plane and on-demand execution.
+
+Point 5 is the strategic finding. The monitor was not merely too aggressive - it had the
+same ability to consume scarce infrastructure as a production governance path. Background
+discovery, research workloads, scoring and governance should have separate quotas or
+priority classes.
+
+### Do not raise the 12s timeout yet
+Increasing it would hide the remaining 5-6 second path rather than explain it. Instrument
+where those seconds go first. The next useful step is stage timing inside the mint path, not
+another architectural feature.
