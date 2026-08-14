@@ -232,3 +232,67 @@ Characterising the equity lane deeply enough to answer that:
 That last item is not a login inconvenience. **Authentication continuity is part of the
 execution architecture.** An agent that loses access unpredictably is not operationally
 autonomous, and device approval has now failed twice with only the selfie fallback working.
+
+---
+
+## Equity lane characterisation, 2026-08-14
+
+Read-only. No review calls, no orders.
+
+### Granularity
+    15second     0 bars      not supported
+    minute    1950 bars      finest usable - 5 days of history
+    5minute    390 bars
+    10minute   195 bars
+    hour        30 bars
+    day          4 bars
+    week         1 bar
+
+Minute is the floor. That supports intraday, not high-frequency - which is the appropriate
+band for a broker-mediated rail anyway.
+
+### Latency
+    quotes        113-159ms across three samples
+    price book    267ms
+    historicals   117-273ms
+    indicators    127-423ms
+
+Comfortably fast enough for a minute timeframe.
+
+### Order book has real depth
+Not top-of-book. Level 2 with size at each level:
+
+    asks  305.69 x15, 305.70 x50, 305.75 x66, 305.78 x9, 305.80 x329, 305.81 x327 ...
+
+Genuine microstructure, and the closest analogue to the liquidity depth the Solana strategy
+reads - though it measures something different.
+
+### Indicators
+Working: rsi, macd, bollinger_bands, sma, ema, vwap, atr. stochastic returns 0 points.
+Configurable period, num_std, fast.
+
+### Scanner - 56 filters in three families
+    fundamentals   PE, forward PE, PEG, EPS, market cap, shares float, shares outstanding,
+                   gross/net/operating margin, ROA, ROE, sector, earnings date, ex-dividend
+    options flow   implied volatility, historical volatility, open interest, total call and
+                   put volume, relative option volume, average call/put volume
+    price action   gap, percent change, dollar change, open, high, low, close, last,
+                   bid, ask, average volume
+
+**The options-flow filters are usable even though options cannot be traded on the agentic
+account.** Screening on unusual call volume, IV expansion or relative option volume as a
+signal for an EQUITY position is a legitimate strategy shape and it is available today.
+
+### Market hours matter
+The AAPL quote carried venue_last_trade_time 19:59:59Z alongside
+venue_last_non_reg_trade_time 22:30Z - regular-session data stale after hours by design.
+Any strategy must distinguish session state rather than treating a quote as current.
+
+### Assessment
+The surface supports a real intraday equity strategy: minute bars, level 2 depth, seven
+indicators, 56 screening filters including options flow, sub-300ms reads. Considerably more
+than a toy.
+
+What it does NOT provide, and what therefore does not transfer from the Solana work: token
+mints, on-chain liquidity, holder distribution, curve state, DEX routing. Different market
+structure, different signals.
