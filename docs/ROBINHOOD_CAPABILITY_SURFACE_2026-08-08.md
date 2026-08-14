@@ -128,3 +128,81 @@ holding its own.
 No cross-account aggregation yet, which is the reserve's central claim - reading all three
 accounts to see total exposure is possible and untested. No policy evaluation. No order,
 mutation, simulation or funding.
+
+---
+
+## Lane discovery, 2026-08-14
+
+Read-only. No orders, no review calls, nothing executed.
+
+### No crypto lane exists on the agent surface
+    crypto tools in the 54-tool surface     0
+    POST /mcp/crypto                        HTTP 404
+    search "SOL"                            returns SOLS, Solstice Advanced Materials
+    search "bitcoin"                        returns IBIT, iShares Bitcoin Trust ETF
+    account model                           no crypto field of any kind
+
+Robinhood the platform trades crypto - SOL, VIRTUAL, BTC, HYPE and others are on the
+consumer site. The AGENT surface does not reach it. Those are different statements and must
+not be collapsed. This is a capability-discovery result about one connector at one date, not
+an architectural limit on a multi-market Sniper.
+
+### The agentic account is equities-only
+    margin          option_level_2   agentic_allowed FALSE
+    cash / Roth     no option level  agentic_allowed FALSE
+    limited_margin  no option level  agentic_allowed TRUE   <- the only agent-tradable one
+
+So the 15 option tools are visible but unusable: the one account an agent may trade in has
+no options permission, and the account with option_level_2 is not agent-eligible.
+
+**Available lane today: equities. Options are exposed but not permitted. Crypto is absent.**
+
+### Market data surface per equity
+    get_equity_quotes               symbols[]                       -> results
+    get_equity_price_book           symbols[]                       -> books (level 2)
+    get_equity_fundamentals         symbols[], bounds               -> results
+    get_equity_historicals          symbols[], start_time, interval -> results
+    get_equity_technical_indicators symbol, type, interval, period,
+                                    num_std, fast, output           -> indicators
+    get_scanner_filter_specs        -                               -> filter_specs
+
+Richer than expected - a real signal surface including order-book depth and configurable
+indicators. Nothing equivalent to on-chain liquidity, holder distribution or curve state,
+which is the concrete reason MomentumSniper's Solana signals do not transfer.
+
+### Order schemas, captured
+    review_equity_order   required account_number, symbol, side, type
+                          optional quantity, dollar_amount, limit_price, stop_price,
+                                   time_in_force, market_hours, tax_lots
+                          "Simulate a stock order without placing it. Returns the current
+                           quote plus pre-trade alerts (buying power, PDT, instrument halt)."
+
+    place_equity_order    same plus ref_id
+                          "Requires an agentic_allowed=true account; non-agentic accounts
+                           are rejected - do not call."
+
+Two things follow. review_* self-describes as non-placing, which is the evidence its PENDING
+classification was waiting for - promotable in a later phase. And Robinhood enforces the
+agentic_allowed rule server-side, independently confirming the structural gate was checking
+the right thing.
+
+### Operational finding: device approval is unreliable
+Two sessions where the push approval never arrived. The selfie fallback worked both times.
+Re-authentication cannot be assumed available on demand, which makes the nine-day token
+window load-bearing for anything running unattended rather than merely convenient.
+
+### Capability declaration - the shape this should eventually take
+Rather than hard-coding "Robinhood supports equities and options", a connector should
+declare what it exposes:
+
+    connector: robinhood_agentic
+      equity.market_data    AVAILABLE
+      equity.review         AVAILABLE
+      equity.execute        AVAILABLE (agentic_allowed accounts only)
+      options.market_data   AVAILABLE
+      options.execute       NOT_PERMITTED (no option_level on the agentic account)
+      index.market_data     AVAILABLE
+      crypto.*              NOT_EXPOSED
+
+Today's discovery is the manual version of what API Connect should eventually produce
+automatically. The Sniper should ask infrastructure what exists rather than assume it.
