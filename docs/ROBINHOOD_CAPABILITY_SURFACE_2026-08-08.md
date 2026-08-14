@@ -155,7 +155,11 @@ an architectural limit on a multi-market Sniper.
 So the 15 option tools are visible but unusable: the one account an agent may trade in has
 no options permission, and the account with option_level_2 is not agent-eligible.
 
-**Available lane today: equities. Options are exposed but not permitted. Crypto is absent.**
+**The only executable agent lane today is equities.** That is a statement about the current
+connector capability surface, not a permanent property of the account, of Robinhood, or of
+the Sniper. Option permission on the agentic account and a future crypto surface are both
+things that could change; the architecture should discover them rather than encode today's
+answer.
 
 ### Market data surface per equity
     get_equity_quotes               symbols[]                       -> results
@@ -206,3 +210,25 @@ declare what it exposes:
 
 Today's discovery is the manual version of what API Connect should eventually produce
 automatically. The Sniper should ask infrastructure what exists rather than assume it.
+
+## Where this leaves the work
+
+The question has moved from "what does Robinhood expose?" to "can a robust equity Sniper
+lane be built on the surface we just proved exists?"
+
+Characterising the equity lane deeply enough to answer that:
+
+    exact scanner filter specs
+    quote freshness and latency
+    price-book depth and update behaviour
+    available historical intervals
+    technical indicator types and parameters
+    review-order response contents - alerts, fees, spread, estimated fill
+    whether fractional dollar orders are accepted on the agentic account
+    market-hours behaviour
+    order-state lifecycle after placement
+    whether the nine-day token window is stable enough for unattended operation
+
+That last item is not a login inconvenience. **Authentication continuity is part of the
+execution architecture.** An agent that loses access unpredictably is not operationally
+autonomous, and device approval has now failed twice with only the selfie fallback working.
