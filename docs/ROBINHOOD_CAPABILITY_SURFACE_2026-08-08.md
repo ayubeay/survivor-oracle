@@ -296,3 +296,48 @@ than a toy.
 What it does NOT provide, and what therefore does not transfer from the Solana work: token
 mints, on-chain liquidity, holder distribution, curve state, DEX routing. Different market
 structure, different signals.
+
+---
+
+## review_equity_order promotion and probe, 2026-08-14
+
+Promoted as a capability-specific allowance, not a blanket SIMULATE permission.
+review_option_order remains denied - options are not permitted on the agentic account, so a
+review there would be meaningless.
+
+### Verified non-executing
+    orders before   0
+    review call     buy $1 AAPL, market
+    orders after    0
+
+Empirical, not inferred from the description.
+
+### What review actually returns
+    order_checks              broker alerts
+    quote_data                last trade, bid, ask, previous close, venue times, state
+    market_data_disclosure    a compliance string
+    guide                     instructions to the agent
+
+**It does NOT return fees, commission, estimated fill price or a spread calculation.** The
+earlier expectation that it would was wrong. The guide says to estimate execution from the
+quote - ask for buys, bid for sells. So execution cost must be modelled from bid/ask rather
+than read from the broker, and the policy has no fee input from this source.
+
+### Robinhood expects human confirmation per order
+From the guide, verbatim in substance: the agent MUST present the preview and get explicit
+confirmation before calling place_equity_order, and this holds even when order_checks is
+empty - empty means no alerts, not that confirmation can be skipped.
+
+That is the venue's stated interaction model. It sits against a fully unattended agent, and
+any design here must either honour it or be explicit that it does not. Recorded as a
+constraint rather than ignored.
+
+### Compliance obligation
+market_data_disclosure must be displayed verbatim and unmodified wherever quotes are shown.
+Any interface built on this inherits that requirement.
+
+### An alert is live on the account
+    order_checks: { alertType: "EQUITY_USER_LEVEL_MARGIN_CALL" }
+
+A margin call flag at user level, surfaced on a $1 review. Possibly related to the negative
+balance on the margin account. **Understand this before funding anything.**

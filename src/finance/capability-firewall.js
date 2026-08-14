@@ -45,8 +45,10 @@ const PHASE_0_POSTURE = {
   OBSERVE_HISTORY: 'ALLOW',
   DISCOVERY: 'ALLOW',
   ANALYZE: 'ALLOW',
-  SIMULATE: 'DENY',                 // review_* self-describes as non-placing; schema not
-                                    // yet captured, so it stays denied until promoted
+  /* Promoted 2026-08-14 for review_equity_order ONLY - see REVIEW_PROMOTION below.
+     Not a blanket SIMULATE allowance. review_option_order stays denied: options are not
+     permitted on the agentic account, so a review there would be meaningless anyway. */
+  SIMULATE: 'DENY',
   MUTATE_METADATA: 'DENY',
   MUTATE_ORDER: 'DENY_BY_DEFAULT_ALLOW_ONLY_WITH_VALID_EXECUTION_AUTHORIZATION',
   EXERCISE_DERIVATIVE: 'DENY',
@@ -55,6 +57,29 @@ const PHASE_0_POSTURE = {
 };
 
 /* Classified against the live surface returned by tools/list on 2026-08-08, v1.1.1. */
+/* Capability-specific promotion. A generic SIMULATE=ALLOW would have permitted
+   review_option_order too, on an account with no options permission. Permission is granted
+   to one named capability with its evidence and constraints recorded beside it. */
+const REVIEW_PROMOTION = {
+  review_equity_order: {
+    classification: 'NON_EXECUTING_SIMULATION',
+    effect: 'NO_CAPITAL_MOVEMENT',
+    permission: 'ALLOW',
+    evidence: 'Robinhood tool description: "Simulate a stock order without placing it. ' +
+              'Returns the current quote plus pre-trade alerts (buying power, PDT, ' +
+              'instrument halt, etc.)." place_equity_order is described as mirroring its ' +
+              'parameters plus ref_id, making review the explicit non-placing twin.',
+    constraints: [
+      'agentic_allowed account only',
+      'review endpoint only - no automatic escalation to place',
+      'response captured as evidence',
+      'order state verified before and after every call',
+    ],
+    verification_required: 'get_equity_orders before and after; any new order reverts this.',
+    promoted_at: '2026-08-14',
+  },
+};
+
 const TOOL_CLASS = {
   // account observation
   get_accounts: CLASS.OBSERVE_ACCOUNT,
@@ -150,6 +175,13 @@ function checkToolCall(toolName, args, authorization, currentSnapshotId) {
   if (posture === 'ALLOW') {
     return { ...base, decision: 'ALLOW', reason: 'CLASS_PERMITTED_IN_PHASE_0' };
   }
+  /* One named capability, promoted on stated evidence, with verification attached. */
+  if (REVIEW_PROMOTION[toolName]) {
+    const pr = REVIEW_PROMOTION[toolName];
+    return { ...base, decision: 'ALLOW', reason: 'CAPABILITY_SPECIFIC_PROMOTION',
+             classification: pr.classification, effect: pr.effect,
+             constraints: pr.constraints, verification_required: pr.verification_required };
+  }
   /* MUTATE_ORDER is never generally permitted. It becomes reachable only for one exact
      action carrying a valid, unexpired, unused execution authorization - and closes again
      immediately. The absence of an authorization is the normal case. */
@@ -226,4 +258,4 @@ function auditToolList(liveToolNames, serverInfo) {
 }
 
 module.exports = { checkToolCall, guardedCall, auditToolList, classify,
-                   CLASS, PHASE_0_POSTURE, TOOL_CLASS, PHASE_0_MODEL };
+                   CLASS, PHASE_0_POSTURE, TOOL_CLASS, REVIEW_PROMOTION, PHASE_0_MODEL };
