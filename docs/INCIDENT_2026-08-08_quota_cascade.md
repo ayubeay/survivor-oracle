@@ -103,3 +103,24 @@ priority classes.
 Increasing it would hide the remaining 5-6 second path rather than explain it. Instrument
 where those seconds go first. The next useful step is stage timing inside the mint path, not
 another architectural feature.
+
+---
+
+## Standing rule, added 2026-08-14 after a third instance
+
+**Never catch and discard without recording what was caught.**
+
+Three occurrences in one week, each costing real time:
+
+    /health returned 200 while the RPC quota was exhausted
+    MomentumSniper logged "OROS governance call failed: " - TimeoutError stringifies to ""
+    the equity collector wrote 0 book records for three runs
+
+The third is the clearest. The venue returned a plain-text message saying exactly what was
+wrong - "too many symbols: this tool returns the order book for up to 4 symbols per call,
+got 10 - split into batches of 4 or fewer" - and a JSON.parse in a try/catch returning null
+made it indistinguishable from an empty result. Adding one console.log found it on the next
+run.
+
+A failure that reports as an empty success is worse than a crash. The crash tells you
+something is wrong; the empty success tells you nothing is.
