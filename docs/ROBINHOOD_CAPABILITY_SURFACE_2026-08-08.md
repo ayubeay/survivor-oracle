@@ -341,3 +341,38 @@ Any interface built on this inherits that requirement.
 
 A margin call flag at user level, surfaced on a $1 review. Possibly related to the negative
 balance on the margin account. **Understand this before funding anything.**
+
+---
+
+## State as of 2026-08-14
+
+**COMPLETE:** discovery, characterisation, observation infrastructure.
+
+    connector surface        54 tools, classified, autonomy ceiling encoded
+    execution contract       review -> disclosure -> human confirmation -> place
+    review boundary          verified non-executing by before/after order state
+    market data              minute bars, level 2 depth, 7 indicators, 56 scanner filters
+    collector                quotes, books, bars, fundamentals - all four sources writing
+
+**OPEN, in order:**
+
+1. **Account readiness.** EQUITY_USER_LEVEL_MARGIN_CALL surfaced on a $1 review. Resolve
+   what it means and what clears it. Blocks funding, not analysis.
+
+2. **Auth continuity.** Every collector run needs interactive authorization, and device
+   push has failed on every attempt - only the selfie fallback works. The data becomes
+   valuable through VARIATION across sessions, opens, closes, earnings and volatile days,
+   which means running for weeks. That is incompatible with a manual login per run.
+
+   Deciding whether to persist the nine-day token is a real change in posture and deserves
+   the same deliberate treatment the review promotion got. Phase 0 holds nothing by design;
+   this would change that.
+
+3. **Signal calibration.** Only once history has accumulated enough variation to measure
+   against. Not before.
+
+4. **Shadow Sniper.** Proposals from calibrated evidence, no execution.
+
+5. **Governed execution.** Only after 1 and 2 are settled.
+
+Next session should start at 1 and 2, not at another market-data probe.
