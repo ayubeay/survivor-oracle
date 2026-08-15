@@ -50,12 +50,25 @@ const ROBINHOOD_AGENTIC = {
               'action without asking your approval, it can place trades without your ' +
               'confirmation"; disclosures state trades may be executed without direct ' +
               'input on each transaction',
-      status: 'DOCUMENTED_BUT_NOT_TECHNICALLY_CHARACTERISED',
-      unknown: [
-        'whether the MCP represents an authorization mode at all',
-        'whether place_equity_order distinguishes reviewed from pre-authorized calls',
-        'or whether authorization lives entirely in the user instruction and agent context',
-      ],
+      status: 'DOCUMENTED_CLIENT_GOVERNED_AUTHORITY',
+      /* Searched, 2026-08-15. No mechanism for expressing granular bounds on standing
+         autonomous authority was observed in any of:
+           - the Trading MCP tool surface (54 tools)
+           - the OAuth scope (single value, "internal")
+           - the returned account model (no mandate fields)
+           - the place_equity_order schema (no authorization parameter)
+           - the Agentic account UI (Agent is not clickable; only Disconnect is offered,
+             and "Let your agent trade options" is ordinary product onboarding with
+             suitability questions, not a mandate editor)
+
+         This is not a claim that no such mechanism exists anywhere in Robinhood. It is a
+         statement about five specific surfaces. */
+      authority_layers_observed: {
+        connection: 'Robinhood governs this - agent connected, Disconnect available',
+        account: 'Robinhood governs this - only agentic_allowed accounts accept execution',
+        product: 'Robinhood governs this - options require separate eligibility onboarding',
+        mandate_bounds: 'NOT OBSERVED on any Robinhood surface - appears client-governed',
+      },
     },
   },
 

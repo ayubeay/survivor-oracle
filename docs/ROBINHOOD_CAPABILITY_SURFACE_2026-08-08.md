@@ -439,3 +439,70 @@ before that is characterised would be the exact error this architecture exists t
     4  only then, a funded experiment
 
 Do not spend capital to discover semantics.
+
+---
+
+## Authority surface search, 2026-08-15
+
+### Where Robinhood does govern
+    connection   agent connected, Disconnect available - real revocation
+    account      only agentic_allowed accounts accept agent execution
+    product      options require separate eligibility onboarding with suitability questions
+
+The Agentic UI's "Let your agent trade options" is ordinary brokerage product onboarding,
+not an autonomy configuration. The Agent entry itself is not clickable; the only exposed
+action is Disconnect.
+
+### Where no mechanism was observed
+No means of expressing granular bounds on standing autonomous authority was found in:
+
+    the Trading MCP tool surface        54 tools, none mandate-related
+    the OAuth scope                     one value, "internal"
+    the account model                   no mandate fields in the full object
+    the place_equity_order schema       no authorization parameter
+    the Agentic account UI              connect and disconnect only
+
+Absent from all five: require-approval toggle, per-trade or daily dollar limits, instrument
+allowlists, position size caps, loss limits, trading-hours restrictions, mandate expiry,
+trade-count limits.
+
+**This is not a claim that no such mechanism exists anywhere in Robinhood.** It is a
+statement about five specific surfaces, searched.
+
+### The defensible finding
+On the Robinhood Agentic surfaces observed as of August 2026, Robinhood technically governs
+agent connection, account eligibility and product capability. Robinhood documents that users
+may authorize agents to execute without per-trade confirmation. No mechanism was observed
+for expressing granular bounds on that standing authority. Those bounds therefore appear to
+be client-governed on the observed surface.
+
+Status moved from DOCUMENTED_BUT_NOT_TECHNICALLY_CHARACTERISED to
+DOCUMENTED_CLIENT_GOVERNED_AUTHORITY.
+
+### What a mandate would need to carry
+If the bounds are ours to express, they need expressing:
+
+    WHO          agent identity, strategy identity
+    WHAT         permitted instruments, asset classes, action types
+    CAPITAL      maximum committed, per-position size, aggregate exposure
+    WHEN         effective from, expiry, session constraints
+    CONDITIONS   the strategy conditions under which authority becomes exercisable
+    RISK         drawdown ceiling, loss budget, concentration, liquidity requirements
+    EVIDENCE     what signals must exist before authority may be invoked
+    REVOCATION   human kill switch plus automatic invalidation conditions
+    EXECUTION    the specific venue capability being invoked
+    RECEIPT      which mandate authorized which action, against which evidence
+
+Robinhood's position that the account holder is responsible does not have to become an
+accountability vacuum. The receipt can preserve the chain: observation -> signal ->
+proposed trade -> evidence confidence -> standing human mandate -> admissibility ->
+authorization -> execution -> result.
+
+Neither "the AI decided" nor "Robinhood allowed it" is then the final explanation for why
+capital moved.
+
+### Still separate and unresolved
+EQUITY_USER_LEVEL_MARGIN_CALL. The UI simultaneously prompts "Add funds to gear up for your
+first trade", which is evidence against treating the Agentic account as blocked - but does
+not explain the alert. Kept as its own account-readiness item rather than folded into this
+finding.
