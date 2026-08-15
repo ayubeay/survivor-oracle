@@ -21,6 +21,7 @@
  */
 
 const crypto = require('crypto');
+const { checkAgainstMandate, mandateState } = require('./mandate');
 
 const AUTH_MODEL = 'survivor-execution-authorization-v2';
 
@@ -74,10 +75,23 @@ function actionFingerprint(order) {
   }));
 }
 
-function issueAuthorization({ policyReceipt, order, capability, ttlSeconds }) {
+function issueAuthorization({ policyReceipt, order, capability, ttlSeconds, mandate }) {
   if (!policyReceipt || policyReceipt.decision !== 'ALLOW') {
     throw new Error('Execution authorization requires a policy ALLOW; got ' +
                     (policyReceipt ? policyReceipt.decision : 'nothing'));
+  }
+  /* A policy ALLOW says the action is sound. It does not say anyone authorised it. Without
+     a mandate behind it, an authorization would assert capability with no source of
+     authority - which is precisely the gap the Robinhood investigation found at the venue. */
+  if (!mandate) {
+    throw new Error('Execution authorization requires a mandate. A policy ALLOW is a ' +
+                    'judgment; authority comes from a human-issued mandate.');
+  }
+  const mcheck = checkAgainstMandate({ mandate, order, capability,
+                                       venue: (order && order.venue) || 'robinhood_agentic',
+                                       deployed_usd: (order && order.deployed_usd) || 0 });
+  if (!mcheck.within_mandate) {
+    throw new Error('Outside the mandate: ' + mcheck.code + ' - ' + (mcheck.detail || ''));
   }
   const now = Date.now();
   const ttl = (ttlSeconds || DEFAULT_TTL_SECONDS) * 1000;
@@ -88,6 +102,12 @@ function issueAuthorization({ policyReceipt, order, capability, ttlSeconds }) {
     policy_receipt_hash: hash(canonical(policyReceipt)),
     state_snapshot_id: policyReceipt.state_snapshot_id || null,
     execution_capability: capability,
+    /* The authority this execution rests on. Recorded so a receipt can answer not merely
+       "was this allowed" but "under whose authority, and within what bounds". */
+    mandate_id: mandate.mandate_id,
+    mandate_version: mandate.version,
+    mandate_hash: mandate.mandate_hash,
+    mandate_issuer: mandate.issuer_identity,
     action_fingerprint: actionFingerprint(order),
     action_summary: {
       account_alias: order.account_alias, symbol: order.symbol, side: order.side,
@@ -125,7 +145,7 @@ function issueAuthorization({ policyReceipt, order, capability, ttlSeconds }) {
 
 /* Every reason an authorization can fail to permit an action. Each is distinct because
    "you altered the order" and "you waited too long" are different mistakes. */
-function verifyAuthorization({ auth, order, capability, currentSnapshotId }) {
+function verifyAuthorization({ auth, order, capability, currentSnapshotId, mandate }) {
   const at = new Date().toISOString();
   const bad = (code, detail) => ({ valid: false, code, detail, checked_at: at });
 
@@ -150,6 +170,19 @@ function verifyAuthorization({ auth, order, capability, currentSnapshotId }) {
     'not signed by this execution governor, or the payload was altered after signing');
   if (auth.governor_key_id !== governor().keyId)
     return bad('AUTHORIZATION_FOREIGN_GOVERNOR', auth.governor_key_id);
+
+  /* A revoked mandate invalidates its outstanding authorizations IMMEDIATELY, not when they
+     expire. A kill switch that waits 30 seconds is not a kill switch. */
+  if (auth.mandate_id) {
+    if (!mandate) return bad('MANDATE_NOT_SUPPLIED',
+      'this authorization references mandate ' + auth.mandate_id + ' which must be presented');
+    if (mandate.mandate_id !== auth.mandate_id)
+      return bad('MANDATE_MISMATCH', 'authorization references a different mandate');
+    const ms = mandateState(mandate);
+    if (ms !== 'ACTIVE') return bad('MANDATE_NO_LONGER_ACTIVE', ms);
+    if (mandate.mandate_hash !== auth.mandate_hash)
+      return bad('MANDATE_CHANGED_SINCE_AUTHORIZATION', 'mandate hash differs');
+  }
 
   if (consumed.has(auth.authorization_id)) return bad('AUTHORIZATION_ALREADY_USED', auth.authorization_id);
   if (Date.now() > new Date(auth.expires_at).getTime())

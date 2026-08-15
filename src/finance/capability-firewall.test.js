@@ -29,12 +29,16 @@ console.log('\nmetadata mutation denied in phase 0');
 ['create_watchlist','update_scan_filters','follow_watchlist','remove_from_watchlist'].forEach(n =>
   t(n + ' denied', checkToolCall(n).decision === 'DENY'));
 
-console.log('\nsimulation denied pending promotion');
-['review_equity_order','review_option_order'].forEach(n => {
-  const r = checkToolCall(n);
-  t(n + ' denied', r.decision === 'DENY');
-  t(n + ' classed SIMULATE', r.capability_class === CLASS.SIMULATE);
-});
+console.log('\nsimulation: equity review promoted, options review still denied');
+/* review_equity_order was promoted 2026-08-14 on Robinhood's stated semantics and verified
+   non-executing by before/after order state. review_option_order stays denied - options are
+   not permitted on the agentic account. */
+let rq = checkToolCall('review_equity_order');
+t('review_equity_order allowed', rq.decision === 'ALLOW');
+t('by capability-specific promotion', rq.reason === 'CAPABILITY_SPECIFIC_PROMOTION');
+let ro = checkToolCall('review_option_order');
+t('review_option_order still denied', ro.decision === 'DENY');
+t('review_option_order classed SIMULATE', ro.capability_class === CLASS.SIMULATE);
 
 console.log('\nobservation allowed');
 ['get_accounts','get_portfolio','get_equity_positions','get_realized_pnl','get_equity_quotes',

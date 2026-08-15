@@ -33,7 +33,8 @@ t('callTool is the only tool path', typeof c.callTool === 'function');
 
 console.log('\nfirewall reachable through the client');
 t('place denied via wouldAllow', c.wouldAllow('place_equity_order').decision === 'DENY');
-t('review denied via wouldAllow', c.wouldAllow('review_equity_order').decision === 'DENY');
+t('equity review allowed via wouldAllow', c.wouldAllow('review_equity_order').decision === 'ALLOW');
+t('option review still denied', c.wouldAllow('review_option_order').decision === 'DENY');
 t('get_portfolio allowed', c.wouldAllow('get_portfolio').decision === 'ALLOW');
 t('unknown denied', c.wouldAllow('anything_new').decision === 'DENY');
 

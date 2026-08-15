@@ -161,7 +161,7 @@ function classify(toolName) {
   return TOOL_CLASS[toolName] || CLASS.UNKNOWN;
 }
 
-function checkToolCall(toolName, args, authorization, currentSnapshotId) {
+function checkToolCall(toolName, args, authorization, currentSnapshotId, mandate) {
   const at = new Date().toISOString();
   const cls = classify(toolName);
   const posture = PHASE_0_POSTURE[cls] || 'DENY';
@@ -192,7 +192,7 @@ function checkToolCall(toolName, args, authorization, currentSnapshotId) {
                      'binds this exact action.' };
     }
     const v = verifyAuthorization({ auth: authorization, order: args,
-                                    capability: toolName, currentSnapshotId });
+                                    capability: toolName, currentSnapshotId, mandate });
     if (!v.valid) {
       return { ...base, decision: 'DENY', reason: 'EXECUTION_AUTHORIZATION_INVALID',
                authorization_failure: v.code, detail: v.detail };
@@ -206,8 +206,8 @@ function checkToolCall(toolName, args, authorization, currentSnapshotId) {
              : 'The OAuth token permits this. This runtime does not expose it.' };
 }
 
-async function guardedCall(transport, toolName, args, authorization, currentSnapshotId) {
-  const check = checkToolCall(toolName, args, authorization, currentSnapshotId);
+async function guardedCall(transport, toolName, args, authorization, currentSnapshotId, mandate) {
+  const check = checkToolCall(toolName, args, authorization, currentSnapshotId, mandate);
   if (check.decision !== 'ALLOW') {
     const err = new Error('Blocked by phase 0 capability firewall: ' + check.reason);
     err.receipt = check;
@@ -219,7 +219,7 @@ async function guardedCall(transport, toolName, args, authorization, currentSnap
      execution must not resurrect permission. */
   if (check.authorization_id) {
     const v = verifyAndConsume({ auth: authorization, order: args,
-                                 capability: toolName, currentSnapshotId });
+                                 capability: toolName, currentSnapshotId, mandate });
     if (!v.valid) {
       const err = new Error('Blocked at consumption: ' + v.code);
       err.receipt = { ...check, decision: 'DENY', reason: 'EXECUTION_AUTHORIZATION_INVALID',
