@@ -124,3 +124,32 @@ run.
 
 A failure that reports as an empty success is worse than a crash. The crash tells you
 something is wrong; the empty success tells you nothing is.
+
+## Third measurement, 2026-08-15 - the intrinsic cost keeps revising down
+
+A fresh RPC key with no quota pressure:
+
+    OROS /events with mint      4.27s   (was 8.40s exhausted, 5.75s after first swap)
+    fetchTokenData full         3.71s   (was 4.91s)
+    getTokenMintInfo            0.27s
+    classifyMintAuthority       0.00s
+    classifyTransferControl     0.10s
+    getDexScreenerData          0.24s
+
+### Correction to the correction
+Yesterday's entry attributed ~2.6s to the quota and called the remaining ~4.9s intrinsic.
+That figure was itself contaminated by residual load. On a clean key the same path measures
+3.71s.
+
+So the attribution has moved twice, in the same direction, each time a cleaner measurement
+became available. The honest statement is that the mint path costs roughly 3.5-4s under
+current conditions and the "intrinsic" component has not stopped revising.
+
+**Lesson: a measurement taken during degradation should not be labelled intrinsic.** Wait
+for a clean baseline before attributing cost to architecture.
+
+### Headroom
+Against MomentumSniper's 12s client timeout, 4.27s is about a third of the budget rather
+than two-thirds. That is real headroom, though the underlying sequencing question stands:
+four cheap calls totalling under a second run AFTER holder distribution rather than
+alongside it.

@@ -547,4 +547,4 @@ async function fetchTokenData(mintAddress) {
   };
 }
 
-module.exports = { fetchTokenData, getTokenMintInfo, getHolderDistribution, getDexScreenerData, isMegacap, getMegacapData, validateMint };
+module.exports = { fetchTokenData, getTokenMintInfo, getHolderDistribution, getDexScreenerData, isMegacap, getMegacapData, validateMint, classifyMintAuthority, classifyTransferControl };
