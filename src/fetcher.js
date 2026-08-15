@@ -472,6 +472,13 @@ async function fetchTokenData(mintAddress) {
       devActivity: null, fetchedAt: new Date().toISOString(), megacap: mega,
     };
   }
+  /* RESERVED OPTIMISATION, not active work.
+     classifyMintAuthority and classifyTransferControl run sequentially AFTER this
+     Promise.all, and together cost under 0.2s while getHolderDistribution dominates.
+     Running them alongside rather than after would cut wall time, but on 2026-08-15 the
+     full path measured 3.71s against a 12s downstream timeout - no operational pressure.
+     Reopen only if p95 OROS latency approaches the timeout or throughput makes it material.
+     Measured breakdown is in docs/INCIDENT_2026-08-08_quota_cascade.md. */
   var results = await Promise.all([
     getTokenMintInfo(mintAddress), getHolderDistribution(mintAddress), getDexScreenerData(mintAddress),
   ]);
