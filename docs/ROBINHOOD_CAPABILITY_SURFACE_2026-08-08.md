@@ -376,3 +376,66 @@ balance on the margin account. **Understand this before funding anything.**
 5. **Governed execution.** Only after 1 and 2 are settled.
 
 Next session should start at 1 and 2, not at another market-data probe.
+
+---
+
+## Correction and a finding, 2026-08-14
+
+### The autonomy ceiling was recorded wrong
+An earlier entry declared equity.autonomy = HUMAN_CONFIRMATION_REQUIRED. That encoded a
+property of the REVIEW WORKFLOW as a property of the VENUE.
+
+Robinhood's Agentic Trading documentation states that a user may instruct an agent to act
+without asking approval, and gives automation examples such as buying on a specified price
+decline. The disclosures say trades may be executed without direct input on each
+transaction.
+
+Two contracts coexist:
+
+    REVIEWED         agent calls review -> presents preview and disclosure
+                     -> explicit human confirmation -> place
+    PRE_AUTHORIZED   standing user mandate -> condition met -> place
+
+The confirmation requirement attaches to the first because the agent chose to review.
+
+Corrected to DUAL_CONTRACT. PRE_AUTHORIZED is marked
+DOCUMENTED_BUT_NOT_TECHNICALLY_CHARACTERISED - the product capability is documented; how the
+MCP represents it is not.
+
+### place_equity_order carries no authorization field
+    account_number, symbol, side, type, quantity, dollar_amount, limit_price,
+    stop_price, time_in_force, market_hours, tax_lots, ref_id
+
+No authorization, confirmation, mandate or approval token. Nothing indicating under what
+authority the order is placed.
+
+**So an order placed under a standing user mandate and an order placed by a malfunctioning
+agent are indistinguishable at the venue.** Robinhood cannot tell them apart, and neither
+can anyone reading the order history afterward. The account holder remains responsible
+either way - the documentation says so explicitly.
+
+The implication: pre-authorization appears to be an agent-and-user SEMANTIC contract rather
+than a per-call broker parameter. If that holds, the broker enforces nothing about mandate
+scope, and every constraint lives client-side.
+
+That is the accountability vacuum the Computable Accountability reserve describes, found in
+a live production system rather than argued hypothetically.
+
+It also settles what the execution authorization is for. Signed, action-bound,
+snapshot-bound, single-use authorization is not governance decoration layered on a venue
+that already tracks this. **It is the only place the distinction between an authorized and
+an unauthorized order can exist.**
+
+### Placement remains DENY
+The documentation establishes that unattended execution is a supported product capability.
+It does not establish how authorization is represented or enforced. Loosening placement
+before that is characterised would be the exact error this architecture exists to prevent.
+
+### Order of work
+    1  account readiness - what EQUITY_USER_LEVEL_MARGIN_CALL means and what clears it
+    2  auth continuity - whether to persist the nine-day token for unattended collection
+    3  technical characterisation of PRE_AUTHORIZED - the mechanism, with the same
+       discipline used for review_equity_order
+    4  only then, a funded experiment
+
+Do not spend capital to discover semantics.
