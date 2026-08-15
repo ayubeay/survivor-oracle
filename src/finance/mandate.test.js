@@ -53,6 +53,38 @@ console.log('\nreview threshold');
 t('under threshold needs no review', chk(base(), order({ notional_usd: 3 })).review_required === false);
 t('over threshold requires review', chk(base(), order({ notional_usd: 8 })).review_required === true);
 
+console.log('\ninstrument type and leverage - crypto.com has 50x perps');
+// A symbol allowlist cannot express leverage. Crypto.com lists 343 perpetual swaps at 50x
+// and 144 spot pairs with margin enabled, so a mandate silent on type would authorise
+// leveraged exposure by omission. Spot at 1x is the default; leverage must be granted.
+const cryptoM = issueMandate({
+  issuer_identity: 'operator:test', subject_agent: 'crypto_sniper',
+  capabilities: ['crypto.trade'], venues: ['crypto_com_exchange'],
+  capital: { total_budget_usd: 5, max_order_usd: 2 },
+  expires_at: new Date(Date.now() + 86400000).toISOString(),
+});
+const cchk = (o) => checkAgainstMandate({ mandate: cryptoM, order: o,
+  capability: 'crypto.trade', venue: 'crypto_com_exchange', deployed_usd: 0 });
+t('spot permitted by default', cchk({ symbol:'BTC_USD', notional_usd:1 }).within_mandate === true);
+t('perp refused on type', cchk({ symbol:'BTCUSD-PERP', notional_usd:1,
+  instrument_type:'PERPETUAL_SWAP', leverage:50 }).code === 'INSTRUMENT_TYPE_NOT_MANDATED');
+t('margin refused on leverage', cchk({ symbol:'BTC_USD', notional_usd:1, leverage:3 })
+  .code === 'EXCEEDS_MANDATE_LEVERAGE');
+
+const levM = issueMandate({
+  issuer_identity: 'operator:test', subject_agent: 'crypto_sniper',
+  capabilities: ['crypto.trade'], venues: ['crypto_com_exchange'],
+  capital: { total_budget_usd: 5, max_order_usd: 2 },
+  instruments: { allowed_types: ['SPOT','PERPETUAL_SWAP'], max_leverage: 3 },
+  expires_at: new Date(Date.now() + 86400000).toISOString(),
+});
+const lchk = (o) => checkAgainstMandate({ mandate: levM, order: o,
+  capability: 'crypto.trade', venue: 'crypto_com_exchange', deployed_usd: 0 });
+t('granted type is permitted', lchk({ symbol:'BTCUSD-PERP', notional_usd:1,
+  instrument_type:'PERPETUAL_SWAP', leverage:2 }).within_mandate === true);
+t('but only up to the granted leverage', lchk({ symbol:'BTCUSD-PERP', notional_usd:1,
+  instrument_type:'PERPETUAL_SWAP', leverage:50 }).code === 'EXCEEDS_MANDATE_LEVERAGE');
+
 console.log('\nlifecycle and revocation');
 let m = base();
 t('starts ACTIVE', mandateState(m) === 'ACTIVE');

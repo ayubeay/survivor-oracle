@@ -85,6 +85,12 @@ function issueMandate(spec) {
     instruments: {
       allow: (spec.instruments && spec.instruments.allow) || null,   // null = any permitted
       deny: (spec.instruments && spec.instruments.deny) || [],
+      /* Symbol lists cannot express leverage. Crypto.com lists 343 perpetual swaps at 50x
+         and two at 100x, plus 144 spot pairs with margin enabled - so a mandate permitting
+         "crypto.trade" without an instrument-type bound would authorise leveraged and short
+         exposure by omission. Default to spot only; leverage must be granted deliberately. */
+      allowed_types: (spec.instruments && spec.instruments.allowed_types) || ['SPOT'],
+      max_leverage: (spec.instruments && spec.instruments.max_leverage) || 1,
     },
 
     capital: {
@@ -182,6 +188,15 @@ function checkAgainstMandate({ mandate, order, capability, venue, deployed_usd }
     return no('VENUE_NOT_MANDATED', venue);
 
   const sym = order && order.symbol;
+  const itype = (order && order.instrument_type) || 'SPOT';
+  if (mandate.instruments.allowed_types.indexOf(itype) === -1)
+    return no('INSTRUMENT_TYPE_NOT_MANDATED',
+              itype + ' not in [' + mandate.instruments.allowed_types.join(', ') + ']');
+  const lev = parseFloat(order && order.leverage) || 1;
+  if (lev > mandate.instruments.max_leverage)
+    return no('EXCEEDS_MANDATE_LEVERAGE',
+              lev + 'x requested, mandate permits ' + mandate.instruments.max_leverage + 'x');
+
   if (mandate.instruments.deny.indexOf(sym) !== -1)
     return no('INSTRUMENT_DENIED', sym);
   if (mandate.instruments.allow && mandate.instruments.allow.indexOf(sym) === -1)
