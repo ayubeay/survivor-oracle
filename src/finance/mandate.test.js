@@ -85,6 +85,40 @@ t('granted type is permitted', lchk({ symbol:'BTCUSD-PERP', notional_usd:1,
 t('but only up to the granted leverage', lchk({ symbol:'BTCUSD-PERP', notional_usd:1,
   instrument_type:'PERPETUAL_SWAP', leverage:50 }).code === 'EXCEEDS_MANDATE_LEVERAGE');
 
+console.log('\nreconciliation against a connector declaration');
+// A mandate should not grant what a venue cannot do. Before this check, a mandate for 50x
+// perpetual swaps was accepted against an equities-only broker - the instrument-type check
+// skipped silently because that connector declared no instrument block. A control that does
+// not run is indistinguishable from one that passed.
+const { CRYPTO_COM_EXCHANGE, ROBINHOOD_AGENTIC } = require('./connector-capabilities');
+const mk = (v, inst) => ({ issuer_identity:'op', subject_agent:'a', capabilities:['trade'],
+  venues:[v], capital:{ total_budget_usd: 5 }, instruments: inst,
+  expires_at: new Date(Date.now()+86400000).toISOString() });
+const accepts = (fn) => { try { fn(); return true; } catch (e) { return false; } };
+
+t('spot on crypto.com accepted', accepts(() => issueMandate(mk('crypto_com_exchange'), CRYPTO_COM_EXCHANGE)));
+t('perps at 3x on crypto.com accepted', accepts(() => issueMandate(
+  mk('crypto_com_exchange', { allowed_types:['PERPETUAL_SWAP'], max_leverage:3 }), CRYPTO_COM_EXCHANGE)));
+t('200x refused - beyond venue maximum', !accepts(() => issueMandate(
+  mk('crypto_com_exchange', { max_leverage:200 }), CRYPTO_COM_EXCHANGE)));
+
+t('equity on robinhood accepted', accepts(() => issueMandate(
+  mk('robinhood_agentic', { allowed_types:['EQUITY'] }), ROBINHOOD_AGENTIC)));
+t('perps on robinhood refused', !accepts(() => issueMandate(
+  mk('robinhood_agentic', { allowed_types:['PERPETUAL_SWAP'] }), ROBINHOOD_AGENTIC)));
+t('options on robinhood refused - declared at zero', !accepts(() => issueMandate(
+  mk('robinhood_agentic', { allowed_types:['OPTION'] }), ROBINHOOD_AGENTIC)));
+t('leverage on robinhood refused', !accepts(() => issueMandate(
+  mk('robinhood_agentic', { allowed_types:['EQUITY'], max_leverage:3 }), ROBINHOOD_AGENTIC)));
+t('a connector declaring nothing is refused, not skipped', !accepts(() => issueMandate(
+  mk('x'), { connector:'x', capabilities:{} })));
+
+console.log('\nenforcement provenance');
+const cm = issueMandate(mk('crypto_com_exchange'), CRYPTO_COM_EXCHANGE);
+t('unverified venue controls stay client-enforced',
+  cm.enforcement.total_budget_usd === 'CLIENT_ENFORCED');
+t('records what it was reconciled against', cm.reconciled_against === 'crypto_com_exchange');
+
 console.log('\nlifecycle and revocation');
 let m = base();
 t('starts ACTIVE', mandateState(m) === 'ACTIVE');

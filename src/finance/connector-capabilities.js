@@ -72,6 +72,16 @@ const ROBINHOOD_AGENTIC = {
     },
   },
 
+  /* Declared so a mandate can be reconciled against it. Absent this, the instrument-type
+     check silently skipped and a mandate granting perpetual swaps on an equities-only
+     broker was accepted - a control that does not run looks exactly like one that passed. */
+  instruments: {
+    by_type: { CCY_PAIR: 0, EQUITY: 1, OPTION: 0 },
+    max_leverage_observed: 1,
+    note: 'Equities only on the agentic account. Options are exposed but the account has ' +
+          'no option_level, so option execution is NOT_PERMITTED. No leverage, no perps.',
+  },
+
   market_data: {
     finest_interval: 'minute',            // 15second returns 0 bars
     depth: 'level_2_with_size',

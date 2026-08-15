@@ -82,7 +82,65 @@ function signablePayload(m) {
   return out;
 }
 
-function issueMandate(spec) {
+/* A mandate should not grant what a venue cannot do, and should record which of its bounds
+   the venue independently enforces. Both are checkable against a connector declaration.
+
+   The first prevents an authority object that looks meaningful and is fiction - granting
+   50x on a venue with no leverage, or options on an account without the permission.
+   The second is what makes a receipt able to say the venue ALSO constrained the action
+   rather than only that we permitted it. */
+function reconcileWithConnector(spec, connector) {
+  const issues = [];
+  if (!connector) return { issues, enforcement: spec.enforcement || {} };
+
+  const caps = connector.capabilities || {};
+  const inst = connector.instruments || {};
+
+  const wantLev = (spec.instruments && spec.instruments.max_leverage) || 1;
+  const venueLev = inst.max_leverage_observed;
+  if (venueLev !== undefined && wantLev > venueLev) {
+    issues.push('mandate grants ' + wantLev + 'x but ' + connector.connector +
+                ' offers at most ' + venueLev + 'x');
+  }
+
+  const wantTypes = (spec.instruments && spec.instruments.allowed_types) || ['SPOT'];
+  const venueTypes = Object.keys(inst.by_type || {});
+  /* A connector that declares no instrument types cannot be reconciled against. Refuse
+     rather than skip - silently passing is how a mandate for 50x perps got accepted on an
+     equities broker. */
+  if (!venueTypes.length) {
+    issues.push(connector.connector + ' declares no instrument types; a mandate cannot be ' +
+                'reconciled against it');
+  }
+  if (venueTypes.length) {
+    const map = { SPOT: 'CCY_PAIR', PERPETUAL_SWAP: 'PERPETUAL_SWAP', FUTURE: 'FUTURE',
+                  EQUITY: 'EQUITY', OPTION: 'OPTION' };
+    wantTypes.forEach(t => {
+      const venueName = map[t] || t;
+      /* Declared with a zero count means the venue knows the type and does not offer it -
+         which is a refusal, not an absence. */
+      if (venueTypes.indexOf(venueName) === -1 || inst.by_type[venueName] === 0)
+        issues.push('mandate grants ' + t + ' but ' + connector.connector +
+                    (inst.by_type[venueName] === 0 ? ' offers none' : ' does not list it'));
+    });
+  }
+
+  /* Only what the connector declares AVAILABLE counts as venue-enforced. UNVERIFIED stays
+     client-enforced - a limit believed to exist at the venue but never observed is a limit
+     we are relying on and cannot point to. */
+  const enforcement = Object.assign({}, spec.enforcement || {});
+  const map = {
+    total_budget_usd: 'venue_trading_budget',
+    expires_at: 'venue_key_expiry',
+  };
+  Object.keys(map).forEach(field => {
+    const cap = caps[map[field]];
+    enforcement[field] = cap === 'AVAILABLE' ? 'BOTH' : 'CLIENT_ENFORCED';
+  });
+  return { issues, enforcement };
+}
+
+function issueMandate(spec, connector) {
   const required = ['issuer_identity', 'subject_agent', 'capabilities', 'venues', 'capital'];
   required.forEach(k => { if (!spec[k]) throw new Error('mandate requires ' + k); });
   if (!spec.capital.total_budget_usd || spec.capital.total_budget_usd <= 0) {
@@ -90,6 +148,11 @@ function issueMandate(spec) {
   }
   if (!spec.expires_at) {
     throw new Error('a mandate must expire. Indefinite authority is not authority, it is drift');
+  }
+
+  const rec = reconcileWithConnector(spec, connector);
+  if (rec.issues.length) {
+    throw new Error('Mandate exceeds venue capability: ' + rec.issues.join('; '));
   }
 
   const now = Date.now();
@@ -156,7 +219,8 @@ function issueMandate(spec) {
        failure in this runtime still meets a wall. That is defense in depth, not
        duplication - and the receipt can say the venue independently constrained the action
        rather than only that we permitted it. */
-    enforcement: spec.enforcement || {},
+    enforcement: rec.enforcement,
+    reconciled_against: connector ? connector.connector : null,
 
     revocation: { status: 'ACTIVE', revoked_at: null, revoked_by: null, reason: null },
 
