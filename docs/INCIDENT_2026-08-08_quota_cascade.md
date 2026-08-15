@@ -153,3 +153,32 @@ Against MomentumSniper's 12s client timeout, 4.27s is about a third of the budge
 than two-thirds. That is real headroom, though the underlying sequencing question stands:
 four cheap calls totalling under a second run AFTER holder distribution rather than
 alongside it.
+
+---
+
+## A component test passing while the path was broken - 2026-08-15
+
+Mandates were bound to execution authorizations. verifyAuthorization checked the mandate
+and rejected revoked ones correctly, verified by calling it directly.
+
+But checkToolCall and guardedCall still took four parameters. The mandate passed as a fifth
+argument was silently discarded, so on the REAL path - agent to firewall to transport - the
+mandate never reached verification.
+
+**Revocation would have appeared to work in tests and done nothing in production.**
+
+The direct test proved the function behaves correctly when handed the right arguments. It
+could not prove the path hands them over. Those are different claims and only one of them
+matters operationally.
+
+Fixed by threading the mandate through both signatures, and by adding a path-level test:
+
+    active mandate -> authorization -> guardedCall -> transport invoked once
+    revoke         -> same authorization -> guardedCall DENY -> transport count unchanged
+    no mandate     -> guardedCall DENY -> transport count unchanged
+
+The transport invocation count is the assertion that matters. Everything else is a claim
+about intent; that is a claim about what actually happened.
+
+**Rule: in a governance layer, test the path, not only the component.** A control that is
+never reached is not a control.
