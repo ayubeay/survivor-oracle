@@ -14,6 +14,29 @@
  * config object.
  *
  * A mandate never contains strategy. It says what an agent MAY do, never what it SHOULD do.
+ *
+ * CONNECTOR CAPABILITY IS NOT AGENT AUTHORITY.
+ *
+ * Demonstrated twice. Robinhood exposes 15 option tools the agentic account cannot use.
+ * Crypto.com exposes 343 perpetual swaps at 50x leverage and 144 margin-enabled spot pairs.
+ * In both cases the venue surface is far wider than any sane mandate, and an authority
+ * object that inherits capability by omission is not an authority object.
+ *
+ * So every risk-bearing dimension defaults closed:
+ *
+ *     instrument types   SPOT only
+ *     leverage           1x
+ *     capital            must be stated; zero authorises nothing
+ *     expiry             required; indefinite authority is drift
+ *     autonomy           false unless granted
+ *
+ * A future venue may expose margin lending, futures, shorting, prediction markets,
+ * transfers or staking. None of it belongs inside a mandate because a connector happens to
+ * offer it.
+ *
+ * The chain: venue says what is possible, mandate says what was authorised, policy says
+ * whether this action is admissible now, authorization permits one execution, receipt
+ * records what happened.
  */
 
 const crypto = require('crypto');
@@ -121,7 +144,18 @@ function issueMandate(spec) {
 
     /* Which constraints the venue itself enforces, and which rest entirely on us. Recorded
        per mandate because it differs by venue - and because a client-enforced-only limit
-       carries different risk than one the venue also rejects. */
+       carries different risk than one the venue also rejects.
+
+       Robinhood, observed:  connection and product are venue-enforced; the bounds of
+                             autonomous action were not found on any surface examined.
+       Crypto.com, expected: agent credentials may carry venue-enforced budgets, expiry and
+                             trading-only permissions. UNVERIFIED until the account is
+                             checked - do not record VENUE_ENFORCED on documentation alone.
+
+       Where a venue also enforces a limit, our mandate should sit at or below it. Then a
+       failure in this runtime still meets a wall. That is defense in depth, not
+       duplication - and the receipt can say the venue independently constrained the action
+       rather than only that we permitted it. */
     enforcement: spec.enforcement || {},
 
     revocation: { status: 'ACTIVE', revoked_at: null, revoked_by: null, reason: null },
