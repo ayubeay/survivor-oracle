@@ -19,7 +19,7 @@ const ROBINHOOD_AGENTIC = {
     'equity.observe':        'AVAILABLE',
     'equity.review':         'AVAILABLE',
     'equity.execute':        'AVAILABLE',
-    'equity.autonomy':       'HUMAN_CONFIRMATION_REQUIRED',
+    'equity.autonomy':       'DUAL_CONTRACT',   // see execution_contracts below
     'options.observe':       'AVAILABLE',
     'options.execute':       'NOT_PERMITTED',   // no option_level on the agentic account
     'index.observe':         'AVAILABLE',
@@ -28,15 +28,35 @@ const ROBINHOOD_AGENTIC = {
     'scanner':               'AVAILABLE',       // 56 filters incl. options flow
   },
 
-  /* Verbatim from the review_equity_order guide: the agent MUST present the preview and
-     obtain explicit confirmation before placing, and this holds even when order_checks is
-     empty. Empty means no broker alerts, not that confirmation may be skipped. */
-  execution_contract: {
-    sequence: ['review', 'present_preview_and_disclosure', 'explicit_human_confirmation', 'place'],
-    disclosure_required: 'market_data_disclosure must be displayed verbatim and unmodified',
-    alerts_required: 'any non-empty order_checks must be surfaced verbatim',
-    autonomy_ceiling: 'HUMAN_CONFIRMATION_REQUIRED',
-    source: 'review_equity_order tool guide, observed 2026-08-14',
+  /* TWO contracts, not one. An earlier version of this file recorded
+     HUMAN_CONFIRMATION_REQUIRED as the venue ceiling. That was wrong - it encoded a
+     property of the review WORKFLOW as a property of the VENUE. Robinhood's Agentic
+     Trading documentation states plainly that a user may instruct an agent to act without
+     asking approval, and gives automation examples. Corrected 2026-08-14. */
+  execution_contracts: {
+    REVIEWED: {
+      sequence: ['review', 'present_preview_and_disclosure', 'explicit_human_confirmation', 'place'],
+      disclosure_required: 'market_data_disclosure verbatim and unmodified',
+      alerts_required: 'any non-empty order_checks surfaced verbatim',
+      trigger: 'the agent chose to call review_equity_order',
+      source: 'review_equity_order tool guide, observed 2026-08-14',
+      note: 'The guide says confirmation is required EVEN WHEN order_checks is empty - ' +
+            'because the user asked to review, they get to review.',
+    },
+    PRE_AUTHORIZED: {
+      sequence: ['standing_mandate', 'condition_met', 'admissibility', 'place'],
+      trigger: 'a standing user instruction to act without per-trade approval',
+      source: 'Robinhood Agentic Trading overview: "if you have asked your agent to take ' +
+              'action without asking your approval, it can place trades without your ' +
+              'confirmation"; disclosures state trades may be executed without direct ' +
+              'input on each transaction',
+      status: 'DOCUMENTED_BUT_NOT_TECHNICALLY_CHARACTERISED',
+      unknown: [
+        'whether the MCP represents an authorization mode at all',
+        'whether place_equity_order distinguishes reviewed from pre-authorized calls',
+        'or whether authorization lives entirely in the user instruction and agent context',
+      ],
+    },
   },
 
   market_data: {
