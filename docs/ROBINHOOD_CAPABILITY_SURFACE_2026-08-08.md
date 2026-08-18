@@ -506,3 +506,33 @@ EQUITY_USER_LEVEL_MARGIN_CALL. The UI simultaneously prompts "Add funds to gear 
 first trade", which is evidence against treating the Agentic account as blocked - but does
 not explain the alert. Kept as its own account-readiness item rather than folded into this
 finding.
+
+---
+
+## Margin call flag investigated, 2026-08-15
+
+The app shows **no margin call**. Notifications run back to January with nothing about a
+call, deficit, restriction or deadline. No banner, no account notice.
+
+So EQUITY_USER_LEVEL_MARGIN_CALL appeared in a review response with no corresponding
+customer-facing event. Two readings, neither established:
+
+    it is a routine pre-trade check label rather than an active alert - an unfunded
+    account reviewing a $1 buy trips a buying-power classification
+
+    or it reflects the -$49.15 on the individual margin account, surfacing at user level
+    below the threshold that generates a notification
+
+**It does not block anything.** Robinhood actively prompts funding of the Agentic account
+and no restriction is applied.
+
+### What this means for policy design
+A broker alert is evidence, not a verdict. This one has no observable account consequence,
+so a policy that treated any non-empty order_checks as a hard DENY would refuse every order
+on this account for no reason.
+
+Alerts should map to graded consequences - some DENY, some DEFER, some THROTTLE, some are
+informational - and that mapping needs evidence per alert type rather than a blanket rule.
+
+Account readiness: **NOT BLOCKED**. The remaining gate before a funded experiment is the
+auth continuity decision, not this.
