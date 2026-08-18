@@ -68,3 +68,61 @@ trading-only permissions at the venue, then:
 and a receipt can record which controls WE enforced and which the venue independently
 enforced. That is stronger evidence than our own decision alone, and it is defense in depth
 rather than duplication.
+
+---
+
+## Agent Key found in the US App account, 2026-08-15
+
+The Agent Key surface exists. Currently "No keys yet" - nothing generated, nothing enabled.
+
+### What it configures, per key
+    Expiration            configurable
+    Permissions           configurable
+    Weekly trading limit  configurable, with a Remaining counter
+
+The Remaining counter is the significant detail. The venue TRACKS CONSUMPTION against the
+limit rather than merely storing a ceiling.
+
+### The venue's own framing
+From the onboarding screen: generate a key choosing what the agent can do and its trading
+limit; link the agent; then instruct it, and it executes up to the specified limit.
+
+Security note, verbatim in substance: anyone with access to the Agent Key can trade up to
+the weekly limit; AI agents may malfunction, misinterpret data, or be manipulated, leading to
+unintended orders. Third-party integrations use open-source components and external
+messaging platforms at the user's own risk.
+
+So the venue treats the weekly limit as the backstop against exactly the failure modes the
+mandate layer exists to bound. That is the right role for it.
+
+### The comparison, now observed rather than assumed
+    ROBINHOOD AGENTIC
+      connection            venue-enforced (Disconnect)
+      account eligibility   venue-enforced (agentic_allowed)
+      product capability    venue-enforced (options onboarding)
+      autonomous bounds     NOT FOUND on any surface examined - client-governed
+
+    CRYPTO.COM AGENT KEY
+      connection            venue-enforced (key generation and revocation)
+      permissions           venue-configured
+      expiry                venue-configured
+      weekly trading budget venue-configured, consumption tracked
+
+**Crypto.com expresses at the venue what Robinhood leaves to the client.**
+
+That makes defense in depth real here: our mandate sits at or below the venue limit, and a
+failure in our runtime still meets a wall. The receipt can record that the venue
+independently constrained the action rather than only that we permitted it.
+
+### Marked OBSERVED, not VERIFIED
+The configuration screen was seen. Enforcement was not tested - no key generated, no order
+attempted. A limit in a settings screen and a limit that rejects an order are different
+claims, and only the second earns VENUE_ENFORCED in a mandate's enforcement map.
+
+### Still unknown
+    whether permissions include a trading-only option that excludes withdrawals
+    the granularity of permissions - instrument types, spot versus perps, order types
+    what expiry options exist
+    whether the weekly limit is per key or per account
+    revocation behaviour and whether it is immediate
+    whether generating a key requires anything irreversible

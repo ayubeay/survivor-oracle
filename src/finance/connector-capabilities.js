@@ -161,9 +161,17 @@ const CRYPTO_COM_EXCHANGE = {
     'perpetual.execute':     'UNVERIFIED',
     'future.observe':        'AVAILABLE',
     'orderbook.depth':       'AVAILABLE',
-    'agent_key':             'UNVERIFIED',      // does a US App account expose one?
-    'venue_trading_budget':  'UNVERIFIED',      // documented elsewhere, not seen here
-    'venue_key_expiry':      'UNVERIFIED',
+    /* Observed in the US App account on 2026-08-15. The Agent Key screen offers
+       Expiration, Permissions and a Weekly trading limit with a Remaining counter - so the
+       venue tracks consumption, not merely a configured ceiling.
+
+       OBSERVED, not VERIFIED: the configuration surface was seen, enforcement behaviour was
+       not tested. A limit that exists in a settings screen and a limit that actually
+       rejects an order are different claims. */
+    'agent_key':             'AVAILABLE',
+    'venue_trading_budget':  'OBSERVED_WEEKLY_WITH_REMAINING',
+    'venue_key_expiry':      'OBSERVED_CONFIGURABLE',
+    'venue_key_permissions': 'OBSERVED_CONFIGURABLE',
     'withdrawal_prohibition':'UNVERIFIED',
     'sandbox':               'UNVERIFIED',
   },
