@@ -38,6 +38,7 @@ currently 193 passing. **Do not commit unless ALL GREEN.**
     A CONTROL THAT IS NEVER REACHED IS NOT A CONTROL
     OBSERVED IS NOT ENFORCED; ENFORCED IS NOT SUFFICIENTLY BOUNDED
     CONFIGURABLE IS NOT SAFELY CONFIGURED
+    CREDENTIAL CAPABILITY IS NOT DEFAULT GRANT IS NOT MINIMUM GRANT
     ABSENCE OF INPUT IS A REASON TO REFUSE, NOT TO SKIP
 
 Each came from a failure, not an opinion. See `docs/DOCTRINE_skipped_controls.md` and
@@ -70,16 +71,22 @@ execute trades; view market data; view balance and transactions; view cash depos
 send cash deposit info; view cash withdrawal details; MAKE CASH WITHDRAWALS; view bank
 accounts; view deposit and withdrawal limits. **The default grant is not trading-only - it
 includes cash withdrawals.** A key generated on the defaults would give an autonomous agent
-authority to move money out. No key generated; Generate never pressed.
+authority to move money out.
+
+The permissions are individually configurable. Working the list box by box, eight of the
+nine uncheck, including `Make cash withdrawals` and `Execute trades`. `View balance &
+transactions` will not uncheck and is the observed minimum grant. So an Agent Key does not
+inherently require withdrawal authority - the default grant does, the capability model does
+not. No key generated; Generate never pressed.
 
 **Not established:**
 
-Whether Crypto.com's nine permissions can be deselected individually, and what a
-hand-picked set is honoured as at execution time - the list is displayed per-permission, but
-only the default was observed. Whether spot and perps are separately permissioned: no
-instrument-type distinction appeared in the permission list at all, which is granularity NOT
-OBSERVED, not evidence either way about what `Execute trades` covers. Whether the weekly
-limit is per key or per account. Whether any venue control actually rejects a violation -
+What a hand-picked Crypto.com permission set is honoured as at execution time - the boxes
+were seen to uncheck, and nothing has been seen to hold against an actual attempt. Whether
+`View balance & transactions` is mandatory at the venue or only in this setup UI. Whether
+spot and perps are separately permissioned: no instrument-type distinction appeared in the
+permission list at all, which is granularity NOT OBSERVED, not evidence either way about
+what `Execute trades` covers. Whether the weekly limit is per key or per account. Whether any venue control actually rejects a violation -
 all Crypto.com controls remain UNVERIFIED, meaning seen in a settings screen and never seen
 refuse anything. How Robinhood represents a standing mandate; no mechanism was found across
 the MCP surface, OAuth scope, account model, order schema or Agentic UI.
@@ -88,13 +95,19 @@ the MCP surface, OAuth scope, account model, order schema or Agentic UI.
 
 ## Active next
 
-1. **Crypto.com permission deselection.** ANSWERED IN PART on 2026-08-19, and the part
-   that came back is bad: `All (default)` includes `Make cash withdrawals`, so the default
-   grant is not safe to create. The nine permissions are displayed individually; whether
-   they can be UNCHECKED one by one was not observed. That is now the gate. Until a
-   read-plus-trade set is seen to be selectable AND seen to be honoured, no key is safe to
-   create. **Do not create a key. Do not tap Generate. Do not assume withdrawal
-   exclusion.**
+1. **Crypto.com `Execute trades` scope.** Permission deselection is CLOSED as of
+   2026-08-19. `All (default)` includes `Make cash withdrawals`, but eight of the nine
+   boxes uncheck; `View balance & transactions` is the observed minimum grant. Money
+   movement is excludable from the credential, which is the good news and it is real.
+
+   The gate moved. The narrowest useful key is `View balance & transactions` +
+   `Execute trades`, and `Execute trades` is ONE permission with no observed subordinate
+   control over spot versus perpetuals versus margin or leverage. On a venue with 341 perps
+   at 50x, that key is near least privilege on money movement and unbounded on product.
+   Characterise what `Execute trades` actually spans before generating anything. Do not
+   infer it from the label.
+
+   **Still do not create a key. Do not tap Generate.**
 
 2. **Crypto.com Expiration options.** CLOSED 2026-08-19. Exactly 30, 60 and 90 days, default
    30. Nothing shorter is offered, so venue expiry is an outer wall and the operative expiry

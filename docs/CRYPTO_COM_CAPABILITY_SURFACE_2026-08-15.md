@@ -174,11 +174,39 @@ the authority to move money out of the account.
 That is why no key exists. **Do not create an API key, and do not assume withdrawal
 exclusion.**
 
-### What was NOT observed, and must not be inferred
-The nine are displayed individually. Whether they can be deselected one by one was not
-observed, and a hand-picked set has not been seen honoured at execution time. So a
-narrower key is not yet a thing this repository knows how to obtain.
+### Correction, same day - the boxes uncheck
+The paragraph that stood here said deselection was not observed and that a narrower key was
+not yet something this repository knew how to obtain. Direct UI interaction on 2026-08-19
+replaced it. The account holder manually unchecked the permissions. Every displayed
+permission can be unchecked EXCEPT `View balance & transactions`, which remains selected
+and cannot be unchecked.
 
+Recorded as OBSERVED:
+
+    Agent Key permissions are individually configurable
+    View balance & transactions is mandatory in this setup UI - it will not uncheck
+    Make cash withdrawals CAN be explicitly removed
+    Execute trades can also be independently removed
+    an Agent Key therefore does not inherently require withdrawal authority,
+      despite All (default) granting it
+    no separate spot / perpetual / margin / leverage execution permissions were observed
+
+This is a materially better security design than `All (default)` made it look. The capability
+model supports something close to least privilege:
+
+    mandatory   balance and transaction visibility
+    optional    execute trades
+    removable   withdrawals, deposits, banking information, limits
+
+**The dangerous part is the default configuration, not the capability model.** That is a
+narrower and fairer criticism than the one recorded a few hours earlier, and the earlier
+one is left in place above because the correction is the useful part.
+
+Still not observed: what a hand-picked set is actually honoured as at execution time.
+Unchecking a box in a setup screen is not a venue refusing the action the box would have
+permitted. Selection was observed; honouring was not.
+
+### What was NOT observed, and must not be inferred
 No spot / perpetual / margin / leverage distinction appeared anywhere in the permission
 list. Record that as **granularity not observed**. It is not proof that `Execute trades`
 necessarily covers every product, and not proof that it does not - the list simply does not
@@ -186,7 +214,33 @@ speak to instrument type. Until it does, the mandate's own `instruments.allowed_
 `max_leverage` bounds carry that dimension by themselves, on a venue with 343 perpetual
 swaps and 341 of them at 50x.
 
+This is now the load-bearing uncertainty, and it is the reason the key still does not get
+generated. The narrowest useful credential is:
+
+    View balance & transactions  +  Execute trades
+
+which is close to least privilege on the MONEY-MOVEMENT axis and entirely unbounded on the
+PRODUCT axis. Excluding withdrawals is real progress; it does not bound what a trade is.
+Do not infer the semantics of `Execute trades`.
+
 The weekly trading limit is unchanged at $1,000 to $20,000, scope still unestablished.
+
+### CREDENTIAL CAPABILITY, DEFAULT GRANT, MINIMUM GRANT
+Three things, not one, and Crypto.com supplied direct evidence that they differ:
+
+    credential capability   what the venue's key CAN carry        includes withdrawals
+    default grant           what it carries if you accept it      includes withdrawals
+    minimum grant           what it can be reduced to             balance and transactions
+
+The wrong question to ask a connector is "does this venue's agent key support withdrawals?"
+Crypto.com's answer is yes, and the answer is not decision-relevant. The right question is
+**"can withdrawal authority be excluded from the credential we actually issue?"** Here the
+answer is also yes, and that one is decision-relevant.
+
+For the capability firewall this is a distinct dimension from anything currently declared. A
+connector's capability surface describes the venue; it does not describe the credential we
+chose. Two keys at the same venue can carry different authority, so authority has to be a
+property of the credential, not of the connector. Recorded, not yet implemented.
 
 ### CONFIGURABLE IS NOT SAFELY CONFIGURED
 The repository already separates observed from enforced, and enforced from sufficiently
@@ -203,14 +257,17 @@ the burden of narrowing it sits with whoever presses Generate.
 
 The three distinctions in sequence, each earned rather than argued:
 
+    capability        is not   default grant         (the key CAN be narrower)
+    default grant     is not   minimum grant         (eight of nine boxes uncheck)
     configurable      is not   safely configured     (default grants withdrawals)
     observed          is not   enforced              (no control seen refusing anything)
     enforced          is not   sufficiently bounded  ($1,000 floor, 30-day floor)
 
 ### Still unknown after 2026-08-19
-    whether the nine permissions can be individually deselected
     what a hand-picked permission set is honoured as at execution time
-    whether Execute trades spans spot, perpetuals and margin
+    whether Execute trades spans spot, perpetuals and margin - LOAD-BEARING, and the
+      reason no key is generated now that money movement is known to be excludable
+    whether View balance & transactions is mandatory at the venue or only in this setup UI
     whether the weekly limit is per key or per account
     revocation behaviour and whether it is immediate
     whether generating a key requires anything irreversible

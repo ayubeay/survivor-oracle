@@ -172,11 +172,18 @@ const CRYPTO_COM_EXCHANGE = {
     'venue_trading_budget':  'OBSERVED_WEEKLY_WITH_REMAINING',
     'venue_key_expiry':      'OBSERVED_CONFIGURABLE_MIN_30_DAYS',
     'venue_key_permissions': 'OBSERVED_CONFIGURABLE_DEFAULT_INCLUDES_WITHDRAWALS',
-    /* Asked on 2026-08-15, answered on 2026-08-19, and the answer is NO for the default
-       grant. The Permissions list shows "Make cash withdrawals" CHECKED under
-       All (default). Withdrawals are not excluded by construction; on the default they are
-       granted. Whether a narrower hand-picked set can exclude them was NOT observed. */
-    'withdrawal_prohibition':'OBSERVED_ABSENT_FROM_DEFAULT_GRANT',
+    /* Two different questions, and they got two different answers on the same day.
+
+       Is withdrawal authority absent from the credential a venue issues?  NO -
+       All (default) checks "Make cash withdrawals".
+       CAN it be excluded from the credential we choose to issue?          YES - the box
+       unchecks, along with seven others.
+
+       The second question is the one that matters for issuing a key, and it is the one a
+       capability firewall should be asking. Recorded as EXCLUDABLE rather than ABSENT
+       because the exclusion was seen in the setup UI and has never been seen to hold
+       against an actual withdrawal attempt. */
+    'withdrawal_prohibition':'OBSERVED_EXCLUDABLE_NOT_DEFAULT',
     'sandbox':               'UNVERIFIED',
   },
 
@@ -238,13 +245,44 @@ const CRYPTO_COM_EXCHANGE = {
       'View deposit & withdrawal limits',
     ],
     permissions_display: 'INDIVIDUALLY_DISPLAYED',
-    permissions_deselection: 'NOT_OBSERVED',
+
+    /* Upgraded 2026-08-19 by direct UI interaction: the account holder unchecked every box
+       the interface allowed. Eight of nine came off. One did not.
+
+       So the capability model is better than All (default) made it look. Withdrawal
+       authority is removable, and even trade authority is removable. The dangerous thing
+       here is the DEFAULT, not the model. */
+    permissions_deselection: 'OBSERVED_INDIVIDUALLY_CONFIGURABLE',
+    permissions_mandatory: ['View balance & transactions'],
+    /* The narrowest grant the UI was seen to allow. Not a key that exists - a floor that
+       was observed in the configuration surface. */
+    permissions_minimum_observed_grant: ['View balance & transactions'],
+    permissions_removable_confirmed: [
+      'Execute trades',
+      'View market data & insights',
+      'View cash deposit info',
+      'Send cash deposit info',
+      'View cash withdrawal details',
+      'Make cash withdrawals',
+      'View bank accounts',
+      'View deposit & withdrawal limits',
+    ],
+    /* Still true and still important: unchecking a box in a setup screen is not the same as
+       a venue refusing an action the box would have permitted. Selection was observed.
+       Honouring was not. */
+    permissions_honoured_at_execution: 'NOT_OBSERVED',
 
     /* No spot / perpetual / margin / leverage distinction appeared anywhere in the
-       permission list. Record that as granularity NOT OBSERVED. It is NOT evidence that
+       permission list, and none appeared under Execute trades when the list was worked
+       through box by box. Record that as granularity NOT OBSERVED. It is NOT evidence that
        'Execute trades' covers every product, and it is NOT evidence that it does not -
-       the list simply does not speak to instrument type. The mandate's own
-       instruments.allowed_types bound therefore carries this dimension alone. */
+       the list simply does not speak to instrument type. Do not infer its semantics.
+
+       This is now the load-bearing uncertainty. A key holding the observed minimum plus
+       Execute trades is close to least privilege on the MONEY-MOVEMENT axis and completely
+       unbounded on the PRODUCT axis, on a venue with 343 perpetual swaps, 341 of them at
+       50x. The mandate's instruments.allowed_types and max_leverage carry that dimension
+       alone, with no credential-side backstop. */
     permissions_instrument_granularity: 'NOT_OBSERVED',
 
     weekly_limit_range_usd: [1000, 20000],
@@ -255,9 +293,11 @@ const CRYPTO_COM_EXCHANGE = {
     observation_method: 'setup screen inspected by the account holder; no key generated, ' +
                         'Generate never pressed, nothing submitted',
 
-    unknown: ['whether the nine permissions can be individually deselected',
-              'what a hand-picked permission set is honoured as at execution time',
-              'whether Execute trades spans spot, perpetuals and margin',
+    unknown: ['what a hand-picked permission set is honoured as at execution time',
+              'whether Execute trades spans spot, perpetuals and margin - the load-bearing ' +
+                'uncertainty now that money movement is excludable',
+              'whether View balance & transactions is mandatory at the venue or only in ' +
+                'this setup UI',
               'whether the weekly limit is per key or per account',
               'whether generating a key is reversible, and revocation behaviour',
               'whether ANY of these controls actually refuses a violation'],
