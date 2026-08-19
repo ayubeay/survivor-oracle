@@ -176,6 +176,26 @@ const CRYPTO_COM_EXCHANGE = {
     'sandbox':               'UNVERIFIED',
   },
 
+  /* The weekly trading limit slider starts at $1,000 - OBSERVED in the setup UI, not
+     verified by attempting a violation. Recorded here because it establishes a conditional
+     granularity fact: IF the limit is enforced as represented, it cannot align with a small
+     experimental mandate and could only act as an outer wall.
+
+     That conditional does not upgrade the enforcement state. Venue-enforced does not imply
+     sufficiently bounded, and observed does not imply enforced. */
+  venue_limit_floors: { total_budget_usd: 1000 },
+
+  agent_key_setup: {
+    flow: ['set_up', 'verify', 'connect'],
+    expiration_default: '30 days',
+    permissions_default: 'All',
+    weekly_limit_range_usd: [1000, 20000],
+    observed_at: '2026-08-15',
+    unknown: ['what "All" permissions includes', 'other expiration options',
+              'whether spot and perps are separately permissioned',
+              'whether withdrawals are excluded by construction'],
+  },
+
   instruments: {
     total: 930,
     by_type: { CCY_PAIR: 577, PERPETUAL_SWAP: 343, FUTURE: 10 },

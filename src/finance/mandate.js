@@ -49,10 +49,20 @@ const STATES = ['DRAFT', 'ACTIVE', 'SUSPENDED', 'REVOKED', 'EXPIRED'];
 /* Defense in depth. Where a venue enforces a constraint itself, the mandate limit should be
    at or below it - so if our layer fails, the venue still refuses. Where the venue enforces
    nothing, the mandate carries the whole responsibility and should say so. */
+/* Three states, not two. Discovered on 2026-08-15 when Crypto.com's Agent Key showed a
+   weekly trading limit with a $1,000 FLOOR - genuinely venue-enforced, and 150x wider than
+   a $6.75 account could ever need.
+
+   VENUE-ENFORCED DOES NOT IMPLY SUFFICIENTLY BOUNDED. Reconciliation must consider both
+   enforcement provenance and constraint GRANULARITY. A $1,000 venue floor cannot substitute
+   for a $5 mandate; it can only stand behind it. */
 const ENFORCEMENT = {
-  VENUE_ENFORCED: 'the venue independently rejects violations',
-  CLIENT_ENFORCED: 'only this runtime prevents violations',
-  BOTH: 'venue and client both constrain - preferred',
+  CLIENT_ONLY: 'no corresponding venue control exists - this runtime is the only bound',
+  VENUE_BACKSTOP: 'the venue enforces something, but coarser or wider than the mandate. ' +
+                  'It is an outer wall, not the operative limit.',
+  VENUE_ALIGNED: 'the venue control can be set at or below the mandate boundary - the ' +
+                 'strongest case, where a runtime failure meets a wall at the same level',
+  UNVERIFIED: 'a venue control is believed to exist but its enforcement was never observed',
 };
 
 function canonical(o) {
@@ -135,7 +145,22 @@ function reconcileWithConnector(spec, connector) {
   };
   Object.keys(map).forEach(field => {
     const cap = caps[map[field]];
-    enforcement[field] = cap === 'AVAILABLE' ? 'BOTH' : 'CLIENT_ENFORCED';
+    if (!cap || cap === 'NOT_EXPOSED') { enforcement[field] = 'CLIENT_ONLY'; return; }
+    /* Seeing a control in a settings screen is not seeing it reject anything. Until an
+       attempted violation is actually refused by the venue, the state is UNVERIFIED
+       regardless of how the limit is configured.
+
+       The $1,000 floor tells us something CONDITIONAL - that IF enforced as represented, it
+       cannot align with a $5 mandate. That is a granularity fact, not an enforcement one,
+       and it does not by itself earn VENUE_BACKSTOP. */
+    if (String(cap).indexOf('OBSERVED') === 0 || cap === 'UNVERIFIED') {
+      enforcement[field] = 'UNVERIFIED'; return;
+    }
+    /* Enforcement verified. Now granularity decides which of the two remaining states. */
+    const floor = (connector.venue_limit_floors || {})[field];
+    const want = field === 'total_budget_usd' ? (spec.capital && spec.capital.total_budget_usd) : null;
+    if (floor && want && want < floor) { enforcement[field] = 'VENUE_BACKSTOP'; return; }
+    enforcement[field] = 'VENUE_ALIGNED';
   });
   return { issues, enforcement };
 }

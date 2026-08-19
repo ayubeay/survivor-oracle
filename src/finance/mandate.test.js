@@ -115,8 +115,18 @@ t('a connector declaring nothing is refused, not skipped', !accepts(() => issueM
 
 console.log('\nenforcement provenance');
 const cm = issueMandate(mk('crypto_com_exchange'), CRYPTO_COM_EXCHANGE);
-t('unverified venue controls stay client-enforced',
-  cm.enforcement.total_budget_usd === 'CLIENT_ENFORCED');
+// Crypto.com's weekly limit was seen in a settings screen, never observed rejecting
+// anything. A control whose existence is observed but whose enforcement is untested is
+// UNVERIFIED - not CLIENT_ONLY, which would understate it, and not VENUE_BACKSTOP, which
+// would claim enforcement we have not seen.
+t('observed but untested venue controls are UNVERIFIED',
+  cm.enforcement.total_budget_usd === 'UNVERIFIED');
+t('so is expiry', cm.enforcement.expires_at === 'UNVERIFIED');
+
+// Robinhood exposes no equivalent control at all - a different state from unverified.
+const rm = issueMandate(mk('robinhood_agentic', { allowed_types:['EQUITY'] }), ROBINHOOD_AGENTIC);
+t('a venue with no such control is CLIENT_ONLY',
+  rm.enforcement.total_budget_usd === 'CLIENT_ONLY');
 t('records what it was reconciled against', cm.reconciled_against === 'crypto_com_exchange');
 
 console.log('\nlifecycle and revocation');
