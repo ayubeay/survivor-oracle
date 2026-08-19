@@ -249,11 +249,20 @@ const CRYPTO_COM_EXCHANGE = {
    * are displayed individually; whether they can be deselected one by one, and what a
    * hand-picked set is actually honoured as, was not observed. */
   agent_key_setup: {
+    /* Confirmed visually 2026-08-19: a three-step progress indicator reading
+       Set up -> Verify -> Connect, with Set up active. */
     flow: ['set_up', 'verify', 'connect'],
+    screen_title: 'Generate API key',
+    screen_subtitle: 'Select the preferences of your key',
+    /* The feature is presented as Agent Key; the setup screen calls the artifact an API
+       key. Recorded because the two names appear in different places for the same thing. */
+    artifact_named: 'API key',
 
     expiration_options: ['30 days', '60 days', '90 days'],
     expiration_default: '30 days',
     expiration_shortest_offered: '30 days',
+    /* A bottom sheet of radio buttons, 30 days filled. One value, not a combination. */
+    expiration_control: 'SINGLE_SELECT_RADIO',
 
     permissions_default: 'All (default)',
     /* Verbatim, in the order displayed, all CHECKED under All (default). */
@@ -313,10 +322,23 @@ const CRYPTO_COM_EXCHANGE = {
     weekly_limit_range_usd: [1000, 20000],
     weekly_limit_scope: 'UNVERIFIED',        // per key or per account, not established
 
+    /* What the Set up step shows about its own consequences, which is: nothing. The
+       primary button reads "Generate API key" and is enabled. No warning, no
+       irreversibility notice, no one-time-display caution appears on this screen.
+
+       That absence is NOT evidence that pressing it is reversible, and NOT evidence that
+       the key is created at that moment rather than after Verify. Set up is step one of
+       three and what the other two do has not been seen. The button was not pressed. */
+    generate_button: 'PRESENT_AND_ENABLED',
+    generate_consequences_stated_on_screen: 'NONE_VISIBLE',
+    generate_reversibility: 'UNKNOWN',
+    key_creation_moment: 'UNKNOWN',
+
     observed_at: '2026-08-19',
     first_seen_at: '2026-08-15',
-    observation_method: 'setup screen inspected by the account holder; no key generated, ' +
-                        'Generate never pressed, nothing submitted',
+    observation_method: 'setup screen inspected by the account holder and reviewed ' +
+                        'directly from screenshots; no key generated, Generate never ' +
+                        'pressed, nothing submitted',
 
     unknown: ['what a hand-picked permission set is honoured as at execution time',
               'whether Execute trades spans spot, perpetuals and margin - the load-bearing ' +
@@ -425,14 +447,38 @@ const CRYPTO_COM_EXCHANGE = {
       inference_permitted: false,
       establishes: 'ACCOUNT_SURFACE_ONLY',
       account_tier: 'BASIC',
-      agent_key_placement: 'under More, labelled Beta',
-      agent_key_maturity: 'BETA',
-      product_families: ['crypto trading (Recurring Buy, Limit Order, Crypto Baskets, TWAP)',
-                         'Stocks',
+
+      /* Read off the account menus, by section heading, as displayed. Fuller than the
+         first pass, which summarised and dropped entries. */
+      menu_sections: {
+        Trade:  ['Recurring Buy', 'Limit Order', 'Crypto Baskets', 'Price alerts', 'TWAP'],
+        Stocks: ['Trend watch', 'Discovery', 'Whale Baskets'],
+        Predict: ['Strike Options', 'UpDown Options'],
+        Assets: ['Tokens Wallet', 'Cash', 'Stocks'],
+        Spend:  ['Card', 'Pay'],
+        Earn:   ['DeFi Yield', 'Airdrop Arena', 'Crypto Earn'],
+      },
+      benefits_page: ['Banking: 3% APY on cash', 'Banking: Instant Global Transfer (Coming Soon)',
+                      'Card: Spend with Crypto.com Card', 'Stocks: 1% Transfer Bonus',
+                      'IRAs: 1% Match contributions', 'IRAs: 1% Transfer'],
+      product_families: ['crypto trading (Recurring Buy, Limit Order, Crypto Baskets, ' +
+                           'Price alerts, TWAP)',
+                         'Stocks (Trend watch, Discovery, Whale Baskets)',
                          'prediction products (Strike Options, UpDown Options)',
                          'Tokens Wallet', 'Cash', 'Card/Pay', 'Earn', 'Rewards', 'IRAs'],
-      note: 'Recorded as text on purpose. The evidence arrived as screenshots of a live ' +
-            'personal account; no image is committed to this repository.',
+
+      /* PROVENANCE SPLIT. Most of the above was confirmed by looking at the account menus
+         directly. These two were not - no Agent Key entry and no Beta label appears
+         anywhere in the images that were reviewed, so they rest on the account holder's
+         report alone. Recorded at the strength of their evidence, not at the strength of
+         the surrounding block. */
+      agent_key_placement: 'under More',
+      agent_key_maturity: 'BETA',
+      agent_key_provenance: 'REPORTED_BY_ACCOUNT_HOLDER_NOT_VISUALLY_CONFIRMED',
+
+      note: 'Recorded as text on purpose. The evidence is screenshots of a live personal ' +
+            'account showing an account holder name and email; no image and no personal ' +
+            'identifier is committed to this repository.',
     },
 
     evidence: 'Setup screen read 2026-08-15 and worked through box by box 2026-08-19 by ' +

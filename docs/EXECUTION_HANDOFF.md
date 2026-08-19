@@ -25,7 +25,7 @@ distinction exist, because at the venues examined it does not.
 
 Files: `src/finance/connector-capabilities.js`, `credential-grant.js`, `mandate.js`,
 `policy.js`, `execution-authorization.js`, `capability-firewall.js`. Tests:
-`./src/finance/run-tests.sh`, currently 293 passing. **Do not commit unless ALL GREEN.**
+`./src/finance/run-tests.sh`, currently 306 passing. **Do not commit unless ALL GREEN.**
 
 `credential-grant.js` landed 2026-08-19. Authority is a property of the credential, not of
 the connector: two keys at one venue can carry different authority, so a receipt naming only
@@ -140,6 +140,17 @@ The checkbox was opened on 2026-08-19: `Execute trades` has no sub-permissions, 
    whether a minimum-plus-`Execute trades` key is worth creating while its product scope is
    unknown. If that cannot be learned without risking capital or an overprivileged
    credential, leave it unknown rather than force an answer.
+
+   Screenshots reviewed 2026-08-19 confirmed the Set up step directly: three-step
+   Set up / Verify / Connect indicator, expiry as a 30/60/90 radio sheet, one Permissions
+   dropdown reading All (default), weekly limit $1,000 with $1K-$20K ticks. The screen
+   states NO consequence for pressing Generate - no warning, no irreversibility notice -
+   so `generate_reversibility` and `key_creation_moment` are both UNKNOWN. An absent
+   warning is not a safety claim.
+
+   One correction from the review: no Agent Key entry and no `Beta` label is visible in the
+   images. That claim now carries
+   `agent_key_provenance: REPORTED_BY_ACCOUNT_HOLDER_NOT_VISUALLY_CONFIRMED`.
 
    **Still do not create a key. Do not tap Generate.**
 

@@ -236,9 +236,18 @@ console.log('\nthe credential constraint survives to the transport');
   // exists so a later edit cannot quietly promote a product list into a capability list.
   const AS = CC.account_surface;
   t('the account surface is recorded', AS.product_families.length === 9);
+  t('by menu section as displayed', Object.keys(AS.menu_sections).length === 6);
+  t('including the trade entries that were first summarised away',
+    AS.menu_sections.Trade.indexOf('Price alerts') !== -1 &&
+    AS.menu_sections.Trade.length === 5);
   t('marked as establishing account surface only', AS.establishes === 'ACCOUNT_SURFACE_ONLY');
   t('inference from it is forbidden', AS.inference_permitted === false);
-  t('agent key is a separate beta feature', AS.agent_key_maturity === 'BETA');
+  // Provenance is part of the claim. The Beta label and the placement under More were
+  // reported, not seen in the images reviewed, and must not read as visually confirmed
+  // just because they sit beside things that were.
+  t('agent key is recorded as beta', AS.agent_key_maturity === 'BETA');
+  t('with its provenance stated separately',
+    AS.agent_key_provenance === 'REPORTED_BY_ACCOUNT_HOLDER_NOT_VISUALLY_CONFIRMED');
   t('no product family leaks into the permission list',
     AS.product_families.every(f => CC.permissions.indexOf(f) === -1));
   t('nor into what any class requires',
@@ -248,7 +257,27 @@ console.log('\nthe credential constraint survives to the transport');
     credential_alias: 'k', connector: CRYPTO_COM_EXCHANGE,
     granted: MANDATORY.concat(['Stocks']),
   }), /cannot extend it/));
-  t('no raw screenshot is referenced', /no image is committed/.test(AS.note));
+  t('no raw screenshot is referenced', /no image and no personal identifier is committed/.test(AS.note));
+
+  console.log('\nno personal identifier reaches the repository');
+  // The evidence is photographs of a live personal account showing a name and an email
+  // address. Descriptions get committed; identifiers do not.
+  const DECL = JSON.stringify(CRYPTO_COM_EXCHANGE);
+  t('no email address in the connector declaration', !/[\w.]+@[\w.]+\.\w+/.test(DECL));
+  t('no account holder name', !/ayuba|yusuf/i.test(DECL));
+
+  console.log('\nthe set up step, seen directly');
+  const KS = CRYPTO_COM_EXCHANGE.agent_key_setup;
+  t('three steps: set up, verify, connect', KS.flow.join() === 'set_up,verify,connect');
+  t('the screen calls the artifact an API key', KS.artifact_named === 'API key');
+  t('expiration is a single-select radio', KS.expiration_control === 'SINGLE_SELECT_RADIO');
+  t('the generate button is present and enabled', KS.generate_button === 'PRESENT_AND_ENABLED');
+  // The screen says nothing about what Generate does. That silence is recorded as silence.
+  t('the screen states no consequences', KS.generate_consequences_stated_on_screen === 'NONE_VISIBLE');
+  t('so reversibility stays unknown', KS.generate_reversibility === 'UNKNOWN');
+  t('and when the key is actually created stays unknown', KS.key_creation_moment === 'UNKNOWN');
+  t('an absent warning is not a safety claim',
+    KS.generate_reversibility !== 'REVERSIBLE' && KS.generate_reversibility !== 'SAFE');
 
   console.log('\nevidence contract: the crypto.com permission list as observed 2026-08-19');
   t('nine permissions', CC.permissions.length === 9);

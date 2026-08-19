@@ -312,6 +312,47 @@ Reading a product list as a capability list is the same error as reading a conne
 surface as authority, one level out. Recorded in the connector declaration with
 `inference_permitted: false`, and tested so a later edit cannot promote it.
 
+### Screenshot review, 2026-08-19 - what the images confirmed and what they did not
+The observations above were reported in text first and the screenshots reviewed afterwards.
+Both are recorded, and where they disagree the weaker claim wins.
+
+**Confirmed by looking:**
+
+    Set up -> Verify -> Connect        three-step indicator, Set up active
+    screen title                       "Generate API key" / "Select the preferences of your key"
+    Expiration                         30 / 60 / 90 days, radio buttons, 30 filled
+    Permissions                        one dropdown reading "All (default)"
+    Weekly trading limit               $1,000 USD, slider ticks $1K $5K $10K $15K $20K
+    account tier                       BASIC
+    account menus                      Trade, Stocks, Predict, Assets, Spend, Earn, Rewards
+
+The account menu detail was fuller than the first pass recorded - Trade also carries
+`Price alerts`, Stocks resolves to `Trend watch`, `Discovery`, `Whale Baskets`, Earn to
+`DeFi Yield`, `Airdrop Arena`, `Crypto Earn`. Corrected rather than left summarised.
+
+**NOT confirmed by looking.** No Agent Key entry and no `Beta` label appears anywhere in the
+images reviewed. That claim rests on the account holder's report alone and is now recorded
+at that strength - `agent_key_provenance: REPORTED_BY_ACCOUNT_HOLDER_NOT_VISUALLY_CONFIRMED` -
+rather than inheriting the confidence of the block around it. It may well be true further
+down a menu that was not captured. It is not evidence yet.
+
+**The Set up screen says nothing about its own consequences.** The primary button reads
+`Generate API key` and is enabled. There is no warning, no irreversibility notice, no
+one-time-display caution. That silence is recorded as silence:
+
+    generate_button                          PRESENT_AND_ENABLED
+    generate_consequences_stated_on_screen   NONE_VISIBLE
+    generate_reversibility                   UNKNOWN
+    key_creation_moment                      UNKNOWN
+
+An absent warning is not a safety claim - the same rule as an absent control not being a
+statement of scope. Set up is step one of three, and whether the key is created on that
+button or after Verify has not been seen. The button was not pressed.
+
+**Privacy.** The images show an account holder name and email address. Descriptions are
+committed; identifiers are not, and a test asserts the connector declaration contains
+neither.
+
 ### Where the residual risk sits, precisely
     credential-level money movement   CAN be excluded - withdrawals, banking, cash
     credential-level product scope    NO narrower control observed under Execute trades
