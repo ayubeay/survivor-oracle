@@ -72,6 +72,29 @@ const ROBINHOOD_AGENTIC = {
     },
   },
 
+  /* What authority the CREDENTIAL carries, as distinct from what the connector can do.
+     Robinhood exposes nothing to narrow: one OAuth scope, "internal", covering cross-account
+     reads and trade authority together, with no per-credential permission surface found
+     across the five surfaces searched on 2026-08-15.
+
+     NOT_EXPOSED is an observation, not a gap in ours. That is what makes it usable: a
+     credential here cannot be narrowed at the venue, so every bound on it is client-side,
+     and declareCredentialGrant refuses to record that silently. */
+  credential_grant_model: {
+    surface: 'NOT_EXPOSED',
+    observed_at: '2026-08-15',
+    permissions: null,
+    mandatory: null,
+    default_grant: null,
+    minimum_observed_grant: null,
+    class_requirements: null,
+    product_scope_of_execution: 'NOT_OBSERVED',
+    evidence: 'OAuth scope is a single value, "internal". No mandate or permission fields ' +
+              'in the Trading MCP tool surface (54 tools), the account model, the ' +
+              'place_equity_order schema, or the Agentic account UI, which offers only ' +
+              'Disconnect. Five surfaces, searched - not a claim about all of Robinhood.',
+  },
+
   /* Declared so a mandate can be reconciled against it. Absent this, the instrument-type
      check silently skipped and a mandate granting perpetual swaps on an equities-only
      broker was accepted - a control that does not run looks exactly like one that passed. */
@@ -301,6 +324,76 @@ const CRYPTO_COM_EXCHANGE = {
               'whether the weekly limit is per key or per account',
               'whether generating a key is reversible, and revocation behaviour',
               'whether ANY of these controls actually refuses a violation'],
+  },
+
+  /* What authority a CREDENTIAL can carry here, as distinct from what the venue can do.
+     This is the connector that forced the distinction to exist: the venue supports cash
+     withdrawals, All (default) grants them, and a configured key can exclude them. Three
+     different answers to three different questions.
+
+     Everything below is OBSERVED in the setup surface on 2026-08-19 and VERIFIED nowhere.
+     No key has been generated and Generate has never been pressed, which is why any grant
+     declared against this connector carries credential_status NOT_YET_ISSUED and therefore
+     authorises nothing at runtime. */
+  credential_grant_model: {
+    surface: 'OBSERVED_CONFIGURABLE',
+    observed_at: '2026-08-19',
+
+    permissions: [
+      'Execute trades',
+      'View market data & insights',
+      'View balance & transactions',
+      'View cash deposit info',
+      'Send cash deposit info',
+      'View cash withdrawal details',
+      'Make cash withdrawals',
+      'View bank accounts',
+      'View deposit & withdrawal limits',
+    ],
+    /* Will not uncheck. The one irreducible permission. */
+    mandatory: ['View balance & transactions'],
+    /* All nine. This is the grant you get by not choosing - and it moves money. */
+    default_grant: [
+      'Execute trades',
+      'View market data & insights',
+      'View balance & transactions',
+      'View cash deposit info',
+      'Send cash deposit info',
+      'View cash withdrawal details',
+      'Make cash withdrawals',
+      'View bank accounts',
+      'View deposit & withdrawal limits',
+    ],
+    minimum_observed_grant: ['View balance & transactions'],
+
+    /* Which permissions an operation class needs before this runtime will attempt it.
+       INFERRED FROM THE PERMISSION LABELS, not observed - the venue was never seen to
+       refuse anything, and the labels are all we have.
+
+       Safe in both directions BECAUSE IT IS ONLY EVER USED TO RESTRICT. If a label means
+       less than it appears, we attempt something the credential cannot do and the venue
+       refuses - no capital moves. If some other permission also enables the class, we
+       refuse an operation that would have worked - inconvenient, not dangerous. Neither
+       error direction spends money, which is the only reason an inference is tolerable
+       here at all. */
+    class_requirements: {
+      MUTATE_ORDER:    ['Execute trades'],
+      OBSERVE_ACCOUNT: ['View balance & transactions'],
+      OBSERVE_MARKET:  ['View market data & insights'],
+    },
+    class_requirements_state: 'INFERRED_FROM_PERMISSION_LABELS',
+
+    /* The load-bearing hole. `Execute trades` is ONE permission with no subordinate control
+       over spot, perpetuals, margin or leverage anywhere in the list. A credential holding
+       it is near least privilege on money movement and entirely unbounded on product, on a
+       venue with 343 perpetual swaps and 341 of them at 50x. Do not infer its semantics
+       from its label. */
+    product_scope_of_execution: 'NOT_OBSERVED',
+
+    evidence: 'Setup screen read 2026-08-15 and worked through box by box 2026-08-19 by ' +
+              'the account holder. Eight of nine permissions uncheck, including Make cash ' +
+              'withdrawals and Execute trades; View balance & transactions will not. ' +
+              'Selection observed; honouring at execution time never observed.',
   },
 
   instruments: {

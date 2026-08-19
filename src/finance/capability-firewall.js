@@ -20,6 +20,7 @@
  */
 
 const { verifyAuthorization, verifyAndConsume } = require('./execution-authorization');
+const { permitsClass, RISK_BEARING_CLASS } = require('./credential-grant');
 
 const PHASE_0_MODEL = 'phase0-capability-firewall-v2';
 
@@ -161,7 +162,28 @@ function classify(toolName) {
   return TOOL_CLASS[toolName] || CLASS.UNKNOWN;
 }
 
-function checkToolCall(toolName, args, authorization, currentSnapshotId, mandate) {
+/* The credential dimension, added 2026-08-19.
+ *
+ * Two keys at the same venue can carry different authority - Crypto.com's Agent Key
+ * demonstrated it - so the connector surface no longer describes what an execution may do.
+ * The credential does, and it has to be presented here, on the only path to transport,
+ * rather than checked once at issuance and trusted afterwards.
+ *
+ * Risk-bearing classes only. Denying a quote lookup because a permission list is unparsed
+ * protects nothing and teaches callers to route around the firewall. */
+function credentialCheck(cls, credentialGrant) {
+  if (RISK_BEARING_CLASS.indexOf(cls) === -1) return null;
+  const c = permitsClass(credentialGrant, cls);
+  if (c.permitted) return null;
+  return { decision: 'DENY', reason: 'CREDENTIAL_GRANT_REFUSED',
+           credential_failure: c.code, detail: c.detail,
+           note: 'Absent or insufficient credential authority for a risk-bearing ' +
+                 'capability. No credential-grant information is not the same as ' +
+                 'unrestricted authority.' };
+}
+
+function checkToolCall(toolName, args, authorization, currentSnapshotId, mandate,
+                       credentialGrant) {
   const at = new Date().toISOString();
   const cls = classify(toolName);
   const posture = PHASE_0_POSTURE[cls] || 'DENY';
@@ -191,14 +213,24 @@ function checkToolCall(toolName, args, authorization, currentSnapshotId, mandate
                note: 'Capital-moving capability. Denied unless an execution authorization ' +
                      'binds this exact action.' };
     }
+    /* Authority (mandate), instrument (credential), and permission for one action
+       (authorization) are three separate things, and all three have to hold. */
+    const cred = credentialCheck(cls, credentialGrant);
+    if (cred) return { ...base, ...cred };
     const v = verifyAuthorization({ auth: authorization, order: args,
-                                    capability: toolName, currentSnapshotId, mandate });
+                                    capability: toolName, currentSnapshotId, mandate,
+                                    credentialGrant });
     if (!v.valid) {
       return { ...base, decision: 'DENY', reason: 'EXECUTION_AUTHORIZATION_INVALID',
                authorization_failure: v.code, detail: v.detail };
     }
     return { ...base, decision: 'ALLOW', reason: 'VALID_EXECUTION_AUTHORIZATION',
-             authorization_id: v.authorization_id, single_use: true };
+             authorization_id: v.authorization_id, single_use: true,
+             /* On the receipt, because "who could have done this" is a question about the
+                credential and the connector cannot answer it. */
+             credential_alias: credentialGrant.credential_alias,
+             credential_grant_state: credentialGrant.grant_state,
+             credential_venue_enforcement: credentialGrant.venue_enforcement };
   }
   return { ...base, decision: 'DENY', reason: 'PHASE_0_CLASS_DENIED',
            note: cls === CLASS.SIMULATE
@@ -206,8 +238,10 @@ function checkToolCall(toolName, args, authorization, currentSnapshotId, mandate
              : 'The OAuth token permits this. This runtime does not expose it.' };
 }
 
-async function guardedCall(transport, toolName, args, authorization, currentSnapshotId, mandate) {
-  const check = checkToolCall(toolName, args, authorization, currentSnapshotId, mandate);
+async function guardedCall(transport, toolName, args, authorization, currentSnapshotId,
+                           mandate, credentialGrant) {
+  const check = checkToolCall(toolName, args, authorization, currentSnapshotId, mandate,
+                              credentialGrant);
   if (check.decision !== 'ALLOW') {
     const err = new Error('Blocked by phase 0 capability firewall: ' + check.reason);
     err.receipt = check;
@@ -218,8 +252,18 @@ async function guardedCall(transport, toolName, args, authorization, currentSnap
      here, and a transport failure still leaves the authorization spent - a failed
      execution must not resurrect permission. */
   if (check.authorization_id) {
+    /* Re-checked here, not merely at the advisory step above, so a credential swapped or
+       revoked between check and consume cannot ride through. Same reason the mandate is
+       re-verified rather than trusted from the first pass. */
+    const cred = credentialCheck(check.capability_class, credentialGrant);
+    if (cred) {
+      const err = new Error('Blocked at consumption: ' + cred.credential_failure);
+      err.receipt = { ...check, ...cred };
+      throw err;
+    }
     const v = verifyAndConsume({ auth: authorization, order: args,
-                                 capability: toolName, currentSnapshotId, mandate });
+                                 capability: toolName, currentSnapshotId, mandate,
+                                 credentialGrant });
     if (!v.valid) {
       const err = new Error('Blocked at consumption: ' + v.code);
       err.receipt = { ...check, decision: 'DENY', reason: 'EXECUTION_AUTHORIZATION_INVALID',
@@ -233,7 +277,7 @@ async function guardedCall(transport, toolName, args, authorization, currentSnap
 
 /* A capability surface receipt. If the server grows from 54 tools to 58, the four new ones
    are UNKNOWN and therefore denied - drift is visible rather than silently absorbed. */
-function auditToolList(liveToolNames, serverInfo) {
+function auditToolList(liveToolNames, serverInfo, credentialGrant) {
   const byClass = {};
   liveToolNames.forEach(n => {
     const c = classify(n);
@@ -254,8 +298,14 @@ function auditToolList(liveToolNames, serverInfo) {
     unknown_default_policy: 'DENY',
     mutation_enabled: false,
     credential_persisted: false,
+    /* An audit that names only the connector cannot say what the credential in hand could
+       have done. Null means no grant was presented, which is itself the finding. */
+    credential_alias: (credentialGrant && credentialGrant.credential_alias) || null,
+    credential_grant_state: (credentialGrant && credentialGrant.grant_state) || 'UNKNOWN',
+    credential_bounded_by_venue: credentialGrant ? credentialGrant.bounded_by_venue : null,
+    credential_venue_enforcement: (credentialGrant && credentialGrant.venue_enforcement) || 'UNKNOWN',
   };
 }
 
-module.exports = { checkToolCall, guardedCall, auditToolList, classify,
+module.exports = { checkToolCall, guardedCall, auditToolList, classify, credentialCheck,
                    CLASS, PHASE_0_POSTURE, TOOL_CLASS, REVIEW_PROMOTION, PHASE_0_MODEL };

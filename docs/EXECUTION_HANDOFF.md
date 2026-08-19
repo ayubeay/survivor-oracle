@@ -16,15 +16,24 @@ distinction exist, because at the venues examined it does not.
 ## The chain
 
     connector declaration   what a venue can do            discovered, never assumed
+    credential grant        what the key we issued carries narrows only; absence refuses
     mandate                 what a human authorised        signed, expiring, revocable
     policy                  is this action admissible now  judgment, not authority
     authorization           one exact execution, once      dies when the mandate does
     firewall                last-mile verification         the only path to transport
     receipt                 what actually happened
 
-Files: `src/finance/connector-capabilities.js`, `mandate.js`, `policy.js`,
-`execution-authorization.js`, `capability-firewall.js`. Tests: `./src/finance/run-tests.sh`,
-currently 193 passing. **Do not commit unless ALL GREEN.**
+Files: `src/finance/connector-capabilities.js`, `credential-grant.js`, `mandate.js`,
+`policy.js`, `execution-authorization.js`, `capability-firewall.js`. Tests:
+`./src/finance/run-tests.sh`, currently 278 passing. **Do not commit unless ALL GREEN.**
+
+`credential-grant.js` landed 2026-08-19. Authority is a property of the credential, not of
+the connector: two keys at one venue can carry different authority, so a receipt naming only
+the connector cannot say what was possible. A grant may only narrow a connector surface,
+never extend it, and never understate a permission the venue forces to be present. Absence
+of grant information refuses risk-bearing execution rather than reading as unrestricted.
+Robinhood declares `NOT_EXPOSED` - observed unboundedness, which must be acknowledged
+explicitly and is not the same as missing information.
 
 ---
 
@@ -39,6 +48,7 @@ currently 193 passing. **Do not commit unless ALL GREEN.**
     OBSERVED IS NOT ENFORCED; ENFORCED IS NOT SUFFICIENTLY BOUNDED
     CONFIGURABLE IS NOT SAFELY CONFIGURED
     CREDENTIAL CAPABILITY IS NOT DEFAULT GRANT IS NOT MINIMUM GRANT
+    AUTHORITY IS A PROPERTY OF THE CREDENTIAL, NOT OF THE CONNECTOR
     ABSENCE OF INPUT IS A REASON TO REFUSE, NOT TO SKIP
 
 Each came from a failure, not an opinion. See `docs/DOCTRINE_skipped_controls.md` and
@@ -106,6 +116,13 @@ the MCP surface, OAuth scope, account model, order schema or Agentic UI.
    at 50x, that key is near least privilege on money movement and unbounded on product.
    Characterise what `Execute trades` actually spans before generating anything. Do not
    infer it from the label.
+
+   The credential dimension is now implemented, so this refuses by construction rather than
+   by discipline: a grant declared against `crypto_com_exchange` carries
+   `credential_status: NOT_YET_ISSUED` and authorises nothing at runtime, and the connector
+   declares `product_scope_of_execution: NOT_OBSERVED`, so no credential can claim to bound
+   instrument type. `instruments.allowed_types` and `max_leverage` carry that dimension with
+   no credential-side backstop.
 
    **Still do not create a key. Do not tap Generate.**
 

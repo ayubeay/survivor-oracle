@@ -22,6 +22,7 @@
 
 const crypto = require('crypto');
 const { checkAgainstMandate, mandateState } = require('./mandate');
+const { permitsClass } = require('./credential-grant');
 
 const AUTH_MODEL = 'survivor-execution-authorization-v2';
 
@@ -75,7 +76,8 @@ function actionFingerprint(order) {
   }));
 }
 
-function issueAuthorization({ policyReceipt, order, capability, ttlSeconds, mandate }) {
+function issueAuthorization({ policyReceipt, order, capability, ttlSeconds, mandate,
+                              credentialGrant }) {
   if (!policyReceipt || policyReceipt.decision !== 'ALLOW') {
     throw new Error('Execution authorization requires a policy ALLOW; got ' +
                     (policyReceipt ? policyReceipt.decision : 'nothing'));
@@ -87,9 +89,22 @@ function issueAuthorization({ policyReceipt, order, capability, ttlSeconds, mand
     throw new Error('Execution authorization requires a mandate. A policy ALLOW is a ' +
                     'judgment; authority comes from a human-issued mandate.');
   }
+  /* A mandate is authority; a credential is the instrument that authority is exercised
+     through. They are separate objects and either can be the narrower one. An authorization
+     may only be issued for the INTERSECTION - a mandate cannot authorise an operation the
+     credential does not carry, however well-founded the mandate is.
+
+     This module only ever issues authorizations for capital-moving execution, so the class
+     in question is always MUTATE_ORDER. Absence of a grant is refused rather than read as
+     unrestricted. */
+  const ccheck = permitsClass(credentialGrant, 'MUTATE_ORDER');
+  if (!ccheck.permitted) {
+    throw new Error('Outside the credential grant: ' + ccheck.code + ' - ' + (ccheck.detail || ''));
+  }
   const mcheck = checkAgainstMandate({ mandate, order, capability,
                                        venue: (order && order.venue) || 'robinhood_agentic',
-                                       deployed_usd: (order && order.deployed_usd) || 0 });
+                                       deployed_usd: (order && order.deployed_usd) || 0,
+                                       credentialGrant });
   if (!mcheck.within_mandate) {
     throw new Error('Outside the mandate: ' + mcheck.code + ' - ' + (mcheck.detail || ''));
   }
@@ -108,6 +123,15 @@ function issueAuthorization({ policyReceipt, order, capability, ttlSeconds, mand
     mandate_version: mandate.version,
     mandate_hash: mandate.mandate_hash,
     mandate_issuer: mandate.issuer_identity,
+    /* The credential this authorization is exercisable through, bound the same way the
+       mandate is. Swapping in a wider credential between issuance and execution has to
+       fail, or the narrowing is decoration. The alias never names key material. */
+    credential_alias: credentialGrant.credential_alias,
+    credential_grant_hash: credentialGrant.grant_hash,
+    credential_grant_state: credentialGrant.grant_state,
+    /* Carried onto the receipt so nobody has to go looking. A configured grant is enforced
+       by THIS runtime; the venue has not been seen to refuse anything it excludes. */
+    credential_venue_enforcement: credentialGrant.venue_enforcement,
     action_fingerprint: actionFingerprint(order),
     action_summary: {
       account_alias: order.account_alias, symbol: order.symbol, side: order.side,
@@ -145,7 +169,8 @@ function issueAuthorization({ policyReceipt, order, capability, ttlSeconds, mand
 
 /* Every reason an authorization can fail to permit an action. Each is distinct because
    "you altered the order" and "you waited too long" are different mistakes. */
-function verifyAuthorization({ auth, order, capability, currentSnapshotId, mandate }) {
+function verifyAuthorization({ auth, order, capability, currentSnapshotId, mandate,
+                               credentialGrant }) {
   const at = new Date().toISOString();
   const bad = (code, detail) => ({ valid: false, code, detail, checked_at: at });
 
@@ -182,6 +207,20 @@ function verifyAuthorization({ auth, order, capability, currentSnapshotId, manda
     if (ms !== 'ACTIVE') return bad('MANDATE_NO_LONGER_ACTIVE', ms);
     if (mandate.mandate_hash !== auth.mandate_hash)
       return bad('MANDATE_CHANGED_SINCE_AUTHORIZATION', 'mandate hash differs');
+  }
+
+  /* The credential must still be the one this authorization was issued against, and must
+     still carry execution. A credential revoked mid-flight invalidates immediately, for the
+     same reason a revoked mandate does - a kill switch that waits for expiry is not one. */
+  if (auth.credential_grant_hash) {
+    if (!credentialGrant) return bad('CREDENTIAL_GRANT_NOT_SUPPLIED',
+      'this authorization is bound to credential ' + auth.credential_alias +
+      ' which must be presented');
+    if (credentialGrant.grant_hash !== auth.credential_grant_hash)
+      return bad('CREDENTIAL_GRANT_CHANGED_SINCE_AUTHORIZATION',
+        'the credential grant differs from the one this authorization was issued against');
+    const cc = permitsClass(credentialGrant, 'MUTATE_ORDER');
+    if (!cc.permitted) return bad('CREDENTIAL_GRANT_EXCLUDES_EXECUTION', cc.code + ': ' + cc.detail);
   }
 
   if (consumed.has(auth.authorization_id)) return bad('AUTHORIZATION_ALREADY_USED', auth.authorization_id);

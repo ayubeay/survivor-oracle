@@ -3,7 +3,7 @@
 # failing for a day after the review promotion because nobody ran them together.
 cd "$(dirname "$0")/../.."
 fail=0
-for f in mandate execution-authorization capability-firewall policy robinhood-auth; do
+for f in mandate credential-grant execution-authorization capability-firewall policy robinhood-auth; do
   out=$(node "src/finance/$f.test.js" 2>&1 | tail -1)
   printf '%-28s %s\n' "$f" "$out"
   echo "$out" | grep -q "0 failed" || fail=1

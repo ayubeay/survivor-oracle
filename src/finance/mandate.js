@@ -288,7 +288,8 @@ function mandateState(m) {
 /* Does this proposed action fall inside the authority envelope? Separate from whether it is
    a good idea - that is the policy's question, and separate again from whether the venue
    will accept it. */
-function checkAgainstMandate({ mandate, order, capability, venue, deployed_usd }) {
+function checkAgainstMandate({ mandate, order, capability, venue, deployed_usd,
+                               credentialGrant }) {
   const at = new Date().toISOString();
   const no = (code, detail) => ({ within_mandate: false, code, detail, checked_at: at,
                                   mandate_id: mandate && mandate.mandate_id });
@@ -307,6 +308,22 @@ function checkAgainstMandate({ mandate, order, capability, venue, deployed_usd }
 
   if (mandate.capabilities.indexOf(capability) === -1)
     return no('CAPABILITY_NOT_MANDATED', capability);
+
+  /* A mandate authorises; a credential carries. An operation needs both, and the mandate
+     does not get to reach past the credential it will be exercised through - the venue
+     would refuse anyway, and a receipt claiming authority the instrument never had is a
+     worse failure than a denial.
+
+     Optional by design. checkAgainstMandate answers "is this within the authority
+     envelope", which is a question that remains meaningful with no credential in hand -
+     mandate issuance and reconciliation both ask it. The execution path always supplies
+     one, and the firewall refuses risk-bearing calls that arrive without it, so the
+     optionality here never becomes a way to skip the check where it counts. */
+  if (credentialGrant) {
+    const cg = require('./credential-grant').permitsClass(credentialGrant, 'MUTATE_ORDER');
+    if (!cg.permitted)
+      return no('CAPABILITY_NOT_IN_CREDENTIAL_GRANT', cg.code + ': ' + (cg.detail || ''));
+  }
   if (mandate.venues.indexOf(venue) === -1)
     return no('VENUE_NOT_MANDATED', venue);
 

@@ -237,10 +237,17 @@ Crypto.com's answer is yes, and the answer is not decision-relevant. The right q
 **"can withdrawal authority be excluded from the credential we actually issue?"** Here the
 answer is also yes, and that one is decision-relevant.
 
-For the capability firewall this is a distinct dimension from anything currently declared. A
-connector's capability surface describes the venue; it does not describe the credential we
+For the capability firewall this is a distinct dimension from anything previously declared.
+A connector's capability surface describes the venue; it does not describe the credential we
 chose. Two keys at the same venue can carry different authority, so authority has to be a
-property of the credential, not of the connector. Recorded, not yet implemented.
+property of the credential, not of the connector.
+
+Implemented 2026-08-19 as `src/finance/credential-grant.js`, and threaded through issuance,
+the mandate check, the firewall and the consumption step - a credential swapped or revoked
+between authorization and transport fails, because a check that runs only at issuance leaves
+the transport reachable by anyone holding the authorization. A grant declared against this
+connector carries `credential_status: NOT_YET_ISSUED` and therefore authorises nothing, so
+the "no key exists" fact is enforced by the code rather than by remembering it.
 
 ### CONFIGURABLE IS NOT SAFELY CONFIGURED
 The repository already separates observed from enforced, and enforced from sufficiently
