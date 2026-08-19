@@ -3,7 +3,7 @@
 Read this first. Then read the repository state relevant to the task. **Repository evidence
 is authoritative over anything remembered or assumed.**
 
-Last updated 2026-08-19.
+Last updated 2026-08-19 (second entry: Crypto.com Agent Key permissions and expiry).
 
 ---
 
@@ -37,6 +37,7 @@ currently 193 passing. **Do not commit unless ALL GREEN.**
     TEST THE PATH, NOT ONLY THE COMPONENT
     A CONTROL THAT IS NEVER REACHED IS NOT A CONTROL
     OBSERVED IS NOT ENFORCED; ENFORCED IS NOT SUFFICIENTLY BOUNDED
+    CONFIGURABLE IS NOT SAFELY CONFIGURED
     ABSENCE OF INPUT IS A REASON TO REFUSE, NOT TO SKIP
 
 Each came from a failure, not an opinion. See `docs/DOCTRINE_skipped_controls.md` and
@@ -58,28 +59,50 @@ EQUITY_USER_LEVEL_MARGIN_CALL appearing in a review response.
 
 Crypto.com Exchange lists 930 instruments - 577 spot, 343 perpetual swaps at 50x, two at
 100x, 144 margin-enabled spot pairs. Ten-level book with order counts. BTC spread 0.16bp.
-Agent Key exists on the US account: Set up / Verify / Connect, expiration defaulting to 30
-days, permissions defaulting to "All", weekly limit slider $1,000 to $20,000.
+Agent Key exists on the US account: Set up / Verify / Connect, weekly limit slider $1,000
+to $20,000.
+
+Agent Key expiration offers exactly 30, 60 and 90 days, defaulting to 30. Nothing shorter
+exists, so venue expiry cannot be set as tight as a short first experiment.
+
+Agent Key permissions are displayed individually, and `All (default)` checks nine of them:
+execute trades; view market data; view balance and transactions; view cash deposit info;
+send cash deposit info; view cash withdrawal details; MAKE CASH WITHDRAWALS; view bank
+accounts; view deposit and withdrawal limits. **The default grant is not trading-only - it
+includes cash withdrawals.** A key generated on the defaults would give an autonomous agent
+authority to move money out. No key generated; Generate never pressed.
 
 **Not established:**
 
-What Crypto.com's "All" permissions includes. Whether withdrawals are excluded by
-construction. Whether spot and perps are separately permissioned. Whether any venue control
-actually rejects a violation - all Crypto.com controls are UNVERIFIED, meaning seen in a
-settings screen and never seen refuse anything. How Robinhood represents a standing mandate;
-no mechanism was found across the MCP surface, OAuth scope, account model, order schema or
-Agentic UI.
+Whether Crypto.com's nine permissions can be deselected individually, and what a
+hand-picked set is honoured as at execution time - the list is displayed per-permission, but
+only the default was observed. Whether spot and perps are separately permissioned: no
+instrument-type distinction appeared in the permission list at all, which is granularity NOT
+OBSERVED, not evidence either way about what `Execute trades` covers. Whether the weekly
+limit is per key or per account. Whether any venue control actually rejects a violation -
+all Crypto.com controls remain UNVERIFIED, meaning seen in a settings screen and never seen
+refuse anything. How Robinhood represents a standing mandate; no mechanism was found across
+the MCP surface, OAuth scope, account model, order schema or Agentic UI.
 
 ---
 
 ## Active next
 
-1. **Crypto.com Permissions dropdown.** Can the venue constrain a key to read plus spot
-   trade, excluding perps, leverage, transfers and withdrawals? Determines whether a key is
-   safe to create. No key generated yet. Do not tap Generate.
+1. **Crypto.com permission deselection.** ANSWERED IN PART on 2026-08-19, and the part
+   that came back is bad: `All (default)` includes `Make cash withdrawals`, so the default
+   grant is not safe to create. The nine permissions are displayed individually; whether
+   they can be UNCHECKED one by one was not observed. That is now the gate. Until a
+   read-plus-trade set is seen to be selectable AND seen to be honoured, no key is safe to
+   create. **Do not create a key. Do not tap Generate. Do not assume withdrawal
+   exclusion.**
 
-2. **Crypto.com Expiration options.** 30 days is the default; shorter is preferable for a
-   first experiment.
+2. **Crypto.com Expiration options.** CLOSED 2026-08-19. Exactly 30, 60 and 90 days, default
+   30. Nothing shorter is offered, so venue expiry is an outer wall and the operative expiry
+   stays the mandate's own. Recorded as `venue_expiry_floor_days: 30`; note that
+   `reconcileWithConnector` has no duration comparison yet, so a verified expiry would
+   report VENUE_ALIGNED however short the mandate is. Inert today - `venue_key_expiry` is
+   OBSERVED_*, which short-circuits to UNVERIFIED - but it needs its own tests before
+   expiry enforcement is ever verified.
 
 3. **Robinhood auth continuity.** Every session needs interactive authorization and device
    push has failed every time - only the selfie fallback works. The equity collector cannot
@@ -87,8 +110,14 @@ Agentic UI.
    Persisting the nine-day token is a real change in posture and deserves deliberate
    treatment.
 
-4. **Robinhood pre-authorized contract.** Documented by Robinhood, not technically
-   characterised. `place_equity_order` stays DENY until it is.
+4. **Robinhood pre-authorized contract.** The handoff previously called this
+   "documented, not technically characterised". That is stale against the code: the
+   2026-08-15 five-surface search already moved PRE_AUTHORIZED to
+   `DOCUMENTED_CLIENT_GOVERNED_AUTHORITY` in `connector-capabilities.js`, with
+   `mandate_bounds` recorded as NOT OBSERVED on any Robinhood surface. What is documented is
+   that unattended execution is a supported product capability; what is established is that
+   the bounds on it appear client-governed. How authorization is represented at the venue is
+   still uncharacterised, and `place_equity_order` stays DENY until it is. Posture unchanged.
 
 ## Not active
 
