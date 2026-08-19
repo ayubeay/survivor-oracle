@@ -218,11 +218,37 @@ console.log('\nthe credential constraint survives to the transport');
 
   console.log('\nwhat the credential does NOT bound');
   const res = residualClientBounds(TRADE, CRYPTO_COM_EXCHANGE);
-  t('product scope is not observed', res.product_scope_state === 'NOT_OBSERVED');
+  // Two claims, kept apart on purpose. The UI absence was SEEN; the meaning of the
+  // permission was not. Collapsing them turns an observation into an assumption.
+  t('the UI exposes no product controls', res.product_scope_controls === 'NOT_EXPOSED_IN_AGENT_KEY_UI');
+  t('and what Execute trades authorises stays unknown', res.product_scope_state === 'UNKNOWN');
+  t('an absence of controls is never a claim about scope',
+    res.product_scope_state !== 'ALL' && res.product_scope_state !== 'SPOT');
   t('so the credential does not bound product', res.credential_bounds_product === false);
   t('and the mandate carries instrument type alone',
     res.carried_by_mandate_alone.indexOf('instruments.allowed_types') !== -1);
   t('and leverage alone', res.carried_by_mandate_alone.indexOf('instruments.max_leverage') !== -1);
+  t('the account product list is fenced off as evidence', res.account_surface_is_not_evidence === true);
+
+  console.log('\naccount capability is not agent-key capability');
+  // The account exposes crypto trading, Stocks, prediction products, Cash, Card, Earn,
+  // Rewards and IRAs. None of that says an Agent Key can reach any of them. This block
+  // exists so a later edit cannot quietly promote a product list into a capability list.
+  const AS = CC.account_surface;
+  t('the account surface is recorded', AS.product_families.length === 9);
+  t('marked as establishing account surface only', AS.establishes === 'ACCOUNT_SURFACE_ONLY');
+  t('inference from it is forbidden', AS.inference_permitted === false);
+  t('agent key is a separate beta feature', AS.agent_key_maturity === 'BETA');
+  t('no product family leaks into the permission list',
+    AS.product_families.every(f => CC.permissions.indexOf(f) === -1));
+  t('nor into what any class requires',
+    Object.keys(CC.class_requirements).every(k =>
+      CC.class_requirements[k].every(p => CC.permissions.indexOf(p) !== -1)));
+  t('a grant can never name a product family', throws(() => declareCredentialGrant({
+    credential_alias: 'k', connector: CRYPTO_COM_EXCHANGE,
+    granted: MANDATORY.concat(['Stocks']),
+  }), /cannot extend it/));
+  t('no raw screenshot is referenced', /no image is committed/.test(AS.note));
 
   console.log('\nevidence contract: the crypto.com permission list as observed 2026-08-19');
   t('nine permissions', CC.permissions.length === 9);
@@ -238,8 +264,17 @@ console.log('\nthe credential constraint survives to the transport');
     CRYPTO_COM_EXCHANGE.agent_key_setup.expiration_options.join() === '30 days,60 days,90 days');
   t('nothing shorter than 30 days',
     CRYPTO_COM_EXCHANGE.agent_key_setup.expiration_shortest_offered === '30 days');
-  t('no instrument granularity was observed',
-    CRYPTO_COM_EXCHANGE.agent_key_setup.permissions_instrument_granularity === 'NOT_OBSERVED');
+  t('no instrument granularity is exposed in the agent key UI',
+    CRYPTO_COM_EXCHANGE.agent_key_setup.permissions_instrument_granularity ===
+      'NOT_EXPOSED_IN_AGENT_KEY_UI');
+  t('execute trades product scope is unknown, not ALL',
+    CC.product_scope_of_execution === 'UNKNOWN');
+  t('and the absence is attributed to the UI',
+    CC.product_scope_controls === 'NOT_EXPOSED_IN_AGENT_KEY_UI');
+  t('with the observation recorded beside it', /single|one checkbox|Execute trades is one/
+    .test(CC.product_scope_evidence));
+  t('robinhood product scope is unknown too',
+    ROBINHOOD_AGENTIC.credential_grant_model.product_scope_of_execution === 'UNKNOWN');
   t('robinhood exposes no per-credential surface',
     ROBINHOOD_AGENTIC.credential_grant_model.surface === 'NOT_EXPOSED');
 

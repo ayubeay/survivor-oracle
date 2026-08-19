@@ -270,6 +270,63 @@ The three distinctions in sequence, each earned rather than argued:
     observed          is not   enforced              (no control seen refusing anything)
     enforced          is not   sufficiently bounded  ($1,000 floor, 30-day floor)
 
+### The checkbox was opened, and the account behind it looked at
+Two further direct observations on 2026-08-19, both recorded as text. The evidence arrived
+as screenshots of a live personal account; **no image is committed to this repository.**
+
+**`Execute trades` is a single checkbox.** Selecting and opening it exposes no additional
+product controls - no sub-permissions, no tooltip, no spot / perpetual / margin split, no
+leverage limit, no instrument selector, no order-type scope.
+
+That is an absence IN THE AGENT KEY UI. It is not a semantic finding. Recorded as two
+fields, deliberately separate:
+
+    product_scope_controls      NOT_EXPOSED_IN_AGENT_KEY_UI   observed
+    product_scope_of_execution  UNKNOWN                       not established
+
+Collapsing those two into one is how a UI observation becomes an assumption. The absence of
+controls is not evidence that `Execute trades` covers everything, nor that it covers spot
+only, nor spot plus perps. It is evidence that the UI does not say.
+
+**The account is not a single-product account.** Its surface exposes several distinct
+product families: crypto trading tools (Recurring Buy, Limit Order, Crypto Baskets, TWAP),
+Stocks, prediction products (Strike Options, UpDown Options), Tokens Wallet, Cash, Card/Pay,
+Earn, Rewards and IRAs. The account is on BASIC. `Agent Key` sits separately under **More**
+and is labelled **Beta**.
+
+This MUST NOT be read as evidence that an Agent Key can operate any of them. It establishes
+account surface and nothing else. What it does establish is that one undifferentiated
+trading checkbox sits above a genuinely wide surface - which makes the missing granularity
+significant rather than merely unsurprising. A single-product account with one trading
+checkbox would say little; this does not.
+
+### ACCOUNT CAPABILITY IS NOT AGENT-KEY CAPABILITY
+The ladder gains a rung at the top, one level further out than the credential distinction:
+
+    account capability     what the account exposes        9 product families
+    agent-key capability   what a key can be asked to do   one trading checkbox
+    credential grant       what our key actually carries   configurable, none issued
+    mandate authority      what a human authorised         SPOT, 1x, capped, expiring
+
+Reading a product list as a capability list is the same error as reading a connector
+surface as authority, one level out. Recorded in the connector declaration with
+`inference_permitted: false`, and tested so a later edit cannot promote it.
+
+### Where the residual risk sits, precisely
+    credential-level money movement   CAN be excluded - withdrawals, banking, cash
+    credential-level product scope    NO narrower control observed under Execute trades
+    mandate-level product scope       CAN restrict to SPOT and 1x
+    venue enforcement of either       UNVERIFIED
+
+So the credential layer bounds money movement and cannot bound product. The mandate bounds
+product with no credential-side backstop, checked by connector reconciliation and the
+firewall. That is the whole residual risk, stated.
+
+The remaining pre-key questions are now narrow: what happens at Generate / Verify /
+Connect, and whether a key carrying only the minimum permissions plus `Execute trades` is
+worth creating while its product scope is unknown. If it cannot be learned without risking
+capital or an overprivileged credential, it stays unknown rather than forced.
+
 ### Still unknown after 2026-08-19
     what a hand-picked permission set is honoured as at execution time
     whether Execute trades spans spot, perpetuals and margin - LOAD-BEARING, and the

@@ -88,7 +88,8 @@ const ROBINHOOD_AGENTIC = {
     default_grant: null,
     minimum_observed_grant: null,
     class_requirements: null,
-    product_scope_of_execution: 'NOT_OBSERVED',
+    product_scope_controls: 'NOT_EXPOSED',
+    product_scope_of_execution: 'UNKNOWN',
     evidence: 'OAuth scope is a single value, "internal". No mandate or permission fields ' +
               'in the Trading MCP tool surface (54 tools), the account model, the ' +
               'place_equity_order schema, or the Agentic account UI, which offers only ' +
@@ -297,16 +298,17 @@ const CRYPTO_COM_EXCHANGE = {
 
     /* No spot / perpetual / margin / leverage distinction appeared anywhere in the
        permission list, and none appeared under Execute trades when the list was worked
-       through box by box. Record that as granularity NOT OBSERVED. It is NOT evidence that
+       through box by box - and none appeared under Execute trades when that checkbox was
+       itself opened. Record it as an absence in this UI. It is NOT evidence that
        'Execute trades' covers every product, and it is NOT evidence that it does not -
-       the list simply does not speak to instrument type. Do not infer its semantics.
+       the UI simply does not say. Do not infer its semantics.
 
        This is now the load-bearing uncertainty. A key holding the observed minimum plus
        Execute trades is close to least privilege on the MONEY-MOVEMENT axis and completely
        unbounded on the PRODUCT axis, on a venue with 343 perpetual swaps, 341 of them at
        50x. The mandate's instruments.allowed_types and max_leverage carry that dimension
        alone, with no credential-side backstop. */
-    permissions_instrument_granularity: 'NOT_OBSERVED',
+    permissions_instrument_granularity: 'NOT_EXPOSED_IN_AGENT_KEY_UI',
 
     weekly_limit_range_usd: [1000, 20000],
     weekly_limit_scope: 'UNVERIFIED',        // per key or per account, not established
@@ -383,12 +385,55 @@ const CRYPTO_COM_EXCHANGE = {
     },
     class_requirements_state: 'INFERRED_FROM_PERMISSION_LABELS',
 
-    /* The load-bearing hole. `Execute trades` is ONE permission with no subordinate control
-       over spot, perpetuals, margin or leverage anywhere in the list. A credential holding
-       it is near least privilege on money movement and entirely unbounded on product, on a
-       venue with 343 perpetual swaps and 341 of them at 50x. Do not infer its semantics
-       from its label. */
-    product_scope_of_execution: 'NOT_OBSERVED',
+    /* TWO DIFFERENT CLAIMS, and collapsing them is how a UI observation becomes a
+       semantic assumption.
+
+       WHAT WAS OBSERVED - `Execute trades` is a single checkbox. Selecting and opening it
+       exposes no additional product controls: no sub-permissions, no tooltip, no
+       spot / perpetual / margin split, no leverage limit, no instrument selector, no
+       order-type scope. That is an absence IN THE AGENT KEY UI, directly observed, and it
+       is a fact about the interface.
+
+       WHAT REMAINS UNKNOWN - what `Execute trades` actually authorises. The absence of
+       controls is not evidence that it covers everything, nor that it covers spot only,
+       nor spot plus perps. It is evidence that the UI does not say. Another surface might;
+       none has been examined.
+
+       Why the absence matters more than it looks: the account is not a single-product
+       account. It exposes several distinct product families (see account_surface below),
+       so one undifferentiated trading checkbox sits above a genuinely wide surface. That
+       makes the missing granularity significant rather than merely unsurprising.
+
+       Consequence for this layer: the credential CANNOT independently bound product type.
+       instruments.allowed_types and instruments.max_leverage carry it alone, backed by
+       connector reconciliation and the firewall, with no credential-side backstop. */
+    product_scope_controls: 'NOT_EXPOSED_IN_AGENT_KEY_UI',
+    product_scope_of_execution: 'UNKNOWN',
+    product_scope_evidence: 'Direct UI observation 2026-08-19: Execute trades is one ' +
+      'checkbox; opening it revealed no sub-permissions, tooltip, product split, leverage ' +
+      'control, instrument selector or order-type scope. Absence in this UI only.',
+
+    /* Account-surface observation, 2026-08-19, recorded because it changes how significant
+       the absence above is - and fenced because it is the most inviting place in this file
+       to make an unsupported inference.
+
+       MUST NOT be used to conclude that an Agent Key can operate any of these. It
+       establishes what the ACCOUNT exposes and nothing about what the CREDENTIAL carries.
+       Agent Key sits under More, separately, labelled Beta. */
+    account_surface: {
+      observed_at: '2026-08-19',
+      inference_permitted: false,
+      establishes: 'ACCOUNT_SURFACE_ONLY',
+      account_tier: 'BASIC',
+      agent_key_placement: 'under More, labelled Beta',
+      agent_key_maturity: 'BETA',
+      product_families: ['crypto trading (Recurring Buy, Limit Order, Crypto Baskets, TWAP)',
+                         'Stocks',
+                         'prediction products (Strike Options, UpDown Options)',
+                         'Tokens Wallet', 'Cash', 'Card/Pay', 'Earn', 'Rewards', 'IRAs'],
+      note: 'Recorded as text on purpose. The evidence arrived as screenshots of a live ' +
+            'personal account; no image is committed to this repository.',
+    },
 
     evidence: 'Setup screen read 2026-08-15 and worked through box by box 2026-08-19 by ' +
               'the account holder. Eight of nine permissions uncheck, including Make cash ' +

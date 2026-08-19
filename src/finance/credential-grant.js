@@ -7,6 +7,19 @@
  *   MINIMUM CREDENTIAL GRANT  the narrowest grant the venue permits
  *   CONFIGURED GRANT          what the credential we actually issued carries
  *
+ * And one more layer above them, added the same day when the wider account surface came
+ * into view:
+ *
+ *   ACCOUNT CAPABILITY   IS NOT   AGENT-KEY CAPABILITY
+ *                        IS NOT   CREDENTIAL GRANT
+ *                        IS NOT   MANDATE AUTHORITY
+ *
+ * The Crypto.com account exposes crypto trading, Stocks, prediction products, Cash, Card,
+ * Earn, Rewards and IRAs. None of that says an Agent Key can touch any of them. A product
+ * visible in an account is not a product reachable by a credential, and reading a product
+ * list as a capability list is the same error as reading a connector surface as authority -
+ * one level further out.
+ *
  * Crypto.com supplied the evidence that these are distinct. Its Agent Key can carry
  * `Make cash withdrawals` - the connector supports it, and `All (default)` grants it. Eight
  * of nine permissions uncheck, so a configured grant can exclude it, and one -
@@ -271,11 +284,22 @@ function permitsClass(grant, capabilityClass) {
  * backstop, and a receipt should be able to say so. */
 function residualClientBounds(grant, connector) {
   const model = (connector && connector.credential_grant_model) || {};
+  /* ONLY a positive observation counts. UNKNOWN, NOT_EXPOSED and an absent field all mean
+     the credential bounds nothing here - the whole point is that an absence of controls
+     never becomes a claim about scope. */
+  const bounds = model.product_scope_of_execution === 'OBSERVED';
   return {
-    credential_bounds_product: model.product_scope_of_execution === 'OBSERVED',
-    product_scope_state: model.product_scope_of_execution || 'NOT_OBSERVED',
-    carried_by_mandate_alone: model.product_scope_of_execution === 'OBSERVED'
+    credential_bounds_product: bounds,
+    /* What the permission MEANS. Unknown until some surface establishes it. */
+    product_scope_state: model.product_scope_of_execution || 'UNKNOWN',
+    /* What the UI OFFERS. A directly observed absence, which is a different claim and the
+       only one of the two that was actually seen. */
+    product_scope_controls: model.product_scope_controls || 'UNKNOWN',
+    carried_by_mandate_alone: bounds
       ? [] : ['instruments.allowed_types', 'instruments.max_leverage'],
+    /* Named so a receipt cannot imply the account's product list bounded anything. */
+    account_surface_is_not_evidence: !!(model.account_surface &&
+                                        model.account_surface.inference_permitted === false),
     venue_enforcement: (grant && grant.venue_enforcement) || 'UNKNOWN',
   };
 }

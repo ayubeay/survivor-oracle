@@ -25,7 +25,7 @@ distinction exist, because at the venues examined it does not.
 
 Files: `src/finance/connector-capabilities.js`, `credential-grant.js`, `mandate.js`,
 `policy.js`, `execution-authorization.js`, `capability-firewall.js`. Tests:
-`./src/finance/run-tests.sh`, currently 278 passing. **Do not commit unless ALL GREEN.**
+`./src/finance/run-tests.sh`, currently 293 passing. **Do not commit unless ALL GREEN.**
 
 `credential-grant.js` landed 2026-08-19. Authority is a property of the credential, not of
 the connector: two keys at one venue can carry different authority, so a receipt naming only
@@ -49,6 +49,9 @@ explicitly and is not the same as missing information.
     CONFIGURABLE IS NOT SAFELY CONFIGURED
     CREDENTIAL CAPABILITY IS NOT DEFAULT GRANT IS NOT MINIMUM GRANT
     AUTHORITY IS A PROPERTY OF THE CREDENTIAL, NOT OF THE CONNECTOR
+    ACCOUNT CAPABILITY IS NOT AGENT-KEY CAPABILITY IS NOT CREDENTIAL GRANT
+      IS NOT MANDATE AUTHORITY
+    AN ABSENCE OF CONTROLS IS NOT A STATEMENT OF SCOPE
     ABSENCE OF INPUT IS A REASON TO REFUSE, NOT TO SKIP
 
 Each came from a failure, not an opinion. See `docs/DOCTRINE_skipped_controls.md` and
@@ -117,12 +120,26 @@ the MCP surface, OAuth scope, account model, order schema or Agentic UI.
    Characterise what `Execute trades` actually spans before generating anything. Do not
    infer it from the label.
 
-   The credential dimension is now implemented, so this refuses by construction rather than
-   by discipline: a grant declared against `crypto_com_exchange` carries
-   `credential_status: NOT_YET_ISSUED` and authorises nothing at runtime, and the connector
-   declares `product_scope_of_execution: NOT_OBSERVED`, so no credential can claim to bound
-   instrument type. `instruments.allowed_types` and `max_leverage` carry that dimension with
-   no credential-side backstop.
+The checkbox was opened on 2026-08-19: `Execute trades` has no sub-permissions, tooltip,
+   product split, leverage control, instrument selector or order-type scope. Recorded as
+   `product_scope_controls: NOT_EXPOSED_IN_AGENT_KEY_UI` - an observed absence in that UI -
+   with `product_scope_of_execution: UNKNOWN` kept separate, because the UI not saying is
+   not the permission meaning everything.
+
+   The credential dimension refuses by construction rather than by discipline: a grant
+   declared against `crypto_com_exchange` carries `credential_status: NOT_YET_ISSUED` and
+   authorises nothing at runtime, and no credential can claim to bound instrument type.
+   `instruments.allowed_types` and `max_leverage` carry that dimension with no
+   credential-side backstop.
+
+   The account surface is recorded and fenced: nine product families including Stocks and
+   prediction products, with Agent Key separate under More and labelled Beta. That is
+   account capability, and it establishes nothing about what a key can reach.
+
+   What is left before a key could exist: what happens at Generate / Verify / Connect, and
+   whether a minimum-plus-`Execute trades` key is worth creating while its product scope is
+   unknown. If that cannot be learned without risking capital or an overprivileged
+   credential, leave it unknown rather than force an answer.
 
    **Still do not create a key. Do not tap Generate.**
 
