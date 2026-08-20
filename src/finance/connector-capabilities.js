@@ -278,6 +278,18 @@ const CRYPTO_COM_EXCHANGE = {
       'View deposit & withdrawal limits',
     ],
     permissions_display: 'INDIVIDUALLY_DISPLAYED',
+    /* A bottom sheet headed `Permissions`, one row per permission with a check control on
+       the right. Seen 2026-08-20 with all nine checked - the All (default) state - which
+       confirms the nine labels and their order exactly as recorded above.
+
+       What the picture does NOT distinguish: which of them can be unchecked. All nine
+       render identically when checked, so the irreducibility of View balance &
+       transactions rests on the interaction that tried to remove it, not on anything
+       visible in the list. Do not expect a future screenshot to show which one is
+       mandatory. */
+    permissions_control: 'CHECKBOX_LIST_IN_BOTTOM_SHEET',
+    permissions_list_visually_confirmed: true,
+    permissions_mandatory_visually_distinguishable: false,
 
     /* Upgraded 2026-08-19 by direct UI interaction: the account holder unchecked every box
        the interface allowed. Eight of nine came off. One did not.
@@ -457,28 +469,46 @@ const CRYPTO_COM_EXCHANGE = {
         Assets: ['Tokens Wallet', 'Cash', 'Stocks'],
         Spend:  ['Card', 'Pay'],
         Earn:   ['DeFi Yield', 'Airdrop Arena', 'Crypto Earn'],
+        Rewards: ['Rewards Hub', 'Campaigns'],
+        Retirement: ['IRAs'],
+        /* The section Agent Key actually lives in, seen 2026-08-20. */
+        More:   ['Agent Key', 'University', 'Settings'],
       },
       benefits_page: ['Banking: 3% APY on cash', 'Banking: Instant Global Transfer (Coming Soon)',
                       'Card: Spend with Crypto.com Card', 'Stocks: 1% Transfer Bonus',
-                      'IRAs: 1% Match contributions', 'IRAs: 1% Transfer'],
+                      'IRAs: 1% Match contributions', 'IRAs: 1% Transfer',
+                      'IRAs: 1% Roll over', 'Services: Up to 5% back on Crypto.com Travel'],
       product_families: ['crypto trading (Recurring Buy, Limit Order, Crypto Baskets, ' +
                            'Price alerts, TWAP)',
                          'Stocks (Trend watch, Discovery, Whale Baskets)',
                          'prediction products (Strike Options, UpDown Options)',
                          'Tokens Wallet', 'Cash', 'Card/Pay', 'Earn', 'Rewards', 'IRAs'],
 
-      /* PROVENANCE SPLIT. Most of the above was confirmed by looking at the account menus
-         directly. These two were not - no Agent Key entry and no Beta label appears
-         anywhere in the images that were reviewed, so they rest on the account holder's
-         report alone. Recorded at the strength of their evidence, not at the strength of
-         the surrounding block. */
-      agent_key_placement: 'under More',
-      agent_key_maturity: 'BETA',
-      agent_key_provenance: 'REPORTED_BY_ACCOUNT_HOLDER_NOT_VISUALLY_CONFIRMED',
+      /* PROVENANCE, revised 2026-08-20 - and revised UPWARDS, which is worth as much as
+         the downgrade was.
 
-      note: 'Recorded as text on purpose. The evidence is screenshots of a live personal ' +
-            'account showing an account holder name and email; no image and no personal ' +
-            'identifier is committed to this repository.',
+         On 2026-08-19 these two were recorded as reported-not-seen, because the images
+         reviewed that day stopped short of the section containing them. A later capture
+         reached it: a `More` group holding Agent Key with a `Beta` chip, above University
+         and Settings, below a Retirement group holding IRAs. Both claims are now
+         confirmed by looking.
+
+         The correction sequence is left visible rather than tidied into a single confident
+         line. A claim that was downgraded for lack of evidence and later re-established
+         BY evidence is a different thing from one that was simply always asserted, and the
+         difference is the part worth keeping. */
+      agent_key_placement: 'under More, labelled Beta, above University and Settings',
+      agent_key_maturity: 'BETA',
+      agent_key_provenance: 'VISUALLY_CONFIRMED',
+      agent_key_provenance_history: [
+        '2026-08-19 REPORTED_BY_ACCOUNT_HOLDER_NOT_VISUALLY_CONFIRMED',
+        '2026-08-20 VISUALLY_CONFIRMED - More section reached in a later capture',
+      ],
+
+      note: 'Recorded as text on purpose. The evidence is photographs of a live personal ' +
+            'account showing an account holder name, email address and reward balances; ' +
+            'no image, no personal identifier and no account balance is committed to ' +
+            'this repository.',
     },
 
     evidence: 'Setup screen read 2026-08-15 and worked through box by box 2026-08-19 by ' +

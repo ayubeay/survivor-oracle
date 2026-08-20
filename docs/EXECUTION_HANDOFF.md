@@ -25,7 +25,7 @@ distinction exist, because at the venues examined it does not.
 
 Files: `src/finance/connector-capabilities.js`, `credential-grant.js`, `mandate.js`,
 `policy.js`, `execution-authorization.js`, `capability-firewall.js`. Tests:
-`./src/finance/run-tests.sh`, currently 306 passing. **Do not commit unless ALL GREEN.**
+`./src/finance/run-tests.sh`, currently 313 passing. **Do not commit unless ALL GREEN.**
 
 `credential-grant.js` landed 2026-08-19. Authority is a property of the credential, not of
 the connector: two keys at one venue can carry different authority, so a receipt naming only
@@ -148,9 +148,16 @@ The checkbox was opened on 2026-08-19: `Execute trades` has no sub-permissions, 
    so `generate_reversibility` and `key_creation_moment` are both UNKNOWN. An absent
    warning is not a safety claim.
 
-   One correction from the review: no Agent Key entry and no `Beta` label is visible in the
-   images. That claim now carries
-   `agent_key_provenance: REPORTED_BY_ACCOUNT_HOLDER_NOT_VISUALLY_CONFIRMED`.
+   Provenance moved twice. On 2026-08-19 the Agent Key placement and `Beta` label were
+   downgraded to reported-not-seen, because the images stopped short of the section holding
+   them. On 2026-08-20 a later capture reached it - `More` > Agent Key `Beta`, above
+   University and Settings - and both are now `VISUALLY_CONFIRMED`, with the downgrade kept
+   in `agent_key_provenance_history`.
+
+   The permission sheet was also seen: nine rows, all checked, order exactly as recorded.
+   It does NOT show which permission is mandatory - all nine render identically when
+   checked - so `View balance & transactions` being irreducible rests on the interaction
+   that tried to remove it and on nothing visible. No screenshot will settle that.
 
    **Still do not create a key. Do not tap Generate.**
 

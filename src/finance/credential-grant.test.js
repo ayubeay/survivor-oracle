@@ -236,18 +236,24 @@ console.log('\nthe credential constraint survives to the transport');
   // exists so a later edit cannot quietly promote a product list into a capability list.
   const AS = CC.account_surface;
   t('the account surface is recorded', AS.product_families.length === 9);
-  t('by menu section as displayed', Object.keys(AS.menu_sections).length === 6);
+  t('by menu section as displayed', Object.keys(AS.menu_sections).length === 9);
+  t('including the More section agent key lives in',
+    AS.menu_sections.More.indexOf('Agent Key') === 0);
   t('including the trade entries that were first summarised away',
     AS.menu_sections.Trade.indexOf('Price alerts') !== -1 &&
     AS.menu_sections.Trade.length === 5);
   t('marked as establishing account surface only', AS.establishes === 'ACCOUNT_SURFACE_ONLY');
   t('inference from it is forbidden', AS.inference_permitted === false);
-  // Provenance is part of the claim. The Beta label and the placement under More were
-  // reported, not seen in the images reviewed, and must not read as visually confirmed
-  // just because they sit beside things that were.
+  // Provenance is part of the claim, and it moves in both directions. This one was
+  // downgraded on 2026-08-19 for lack of evidence and re-established on 2026-08-20 by
+  // evidence. Both steps stay recorded - a claim that survived a downgrade is not the same
+  // as one that was never checked.
   t('agent key is recorded as beta', AS.agent_key_maturity === 'BETA');
-  t('with its provenance stated separately',
-    AS.agent_key_provenance === 'REPORTED_BY_ACCOUNT_HOLDER_NOT_VISUALLY_CONFIRMED');
+  t('now visually confirmed', AS.agent_key_provenance === 'VISUALLY_CONFIRMED');
+  t('and the downgrade that preceded it is still on the record',
+    AS.agent_key_provenance_history.length === 2 &&
+    /NOT_VISUALLY_CONFIRMED/.test(AS.agent_key_provenance_history[0]));
+  t('placement names the section it was found in', /under More/.test(AS.agent_key_placement));
   t('no product family leaks into the permission list',
     AS.product_families.every(f => CC.permissions.indexOf(f) === -1));
   t('nor into what any class requires',
@@ -257,7 +263,8 @@ console.log('\nthe credential constraint survives to the transport');
     credential_alias: 'k', connector: CRYPTO_COM_EXCHANGE,
     granted: MANDATORY.concat(['Stocks']),
   }), /cannot extend it/));
-  t('no raw screenshot is referenced', /no image and no personal identifier is committed/.test(AS.note));
+  t('no raw screenshot is referenced',
+    /no image, no personal identifier and no account balance is committed/.test(AS.note));
 
   console.log('\nno personal identifier reaches the repository');
   // The evidence is photographs of a live personal account showing a name and an email
@@ -265,12 +272,22 @@ console.log('\nthe credential constraint survives to the transport');
   const DECL = JSON.stringify(CRYPTO_COM_EXCHANGE);
   t('no email address in the connector declaration', !/[\w.]+@[\w.]+\.\w+/.test(DECL));
   t('no account holder name', !/ayuba|yusuf/i.test(DECL));
+  // The later images also show reward balances. Venue configuration figures belong here;
+  // the account holder's money does not.
+  t('no account balance figure', !/74\.64/.test(DECL));
 
   console.log('\nthe set up step, seen directly');
   const KS = CRYPTO_COM_EXCHANGE.agent_key_setup;
   t('three steps: set up, verify, connect', KS.flow.join() === 'set_up,verify,connect');
   t('the screen calls the artifact an API key', KS.artifact_named === 'API key');
   t('expiration is a single-select radio', KS.expiration_control === 'SINGLE_SELECT_RADIO');
+  t('permissions are a checkbox list in a sheet',
+    KS.permissions_control === 'CHECKBOX_LIST_IN_BOTTOM_SHEET');
+  t('the nine labels were confirmed by looking', KS.permissions_list_visually_confirmed === true);
+  // The default state renders all nine identically, so no image can show which one will
+  // refuse to uncheck. That fact came from interaction and only from interaction.
+  t('but which one is mandatory is not visible',
+    KS.permissions_mandatory_visually_distinguishable === false);
   t('the generate button is present and enabled', KS.generate_button === 'PRESENT_AND_ENABLED');
   // The screen says nothing about what Generate does. That silence is recorded as silence.
   t('the screen states no consequences', KS.generate_consequences_stated_on_screen === 'NONE_VISIBLE');

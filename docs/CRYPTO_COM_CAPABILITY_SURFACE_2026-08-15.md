@@ -330,11 +330,32 @@ The account menu detail was fuller than the first pass recorded - Trade also car
 `Price alerts`, Stocks resolves to `Trend watch`, `Discovery`, `Whale Baskets`, Earn to
 `DeFi Yield`, `Airdrop Arena`, `Crypto Earn`. Corrected rather than left summarised.
 
-**NOT confirmed by looking.** No Agent Key entry and no `Beta` label appears anywhere in the
-images reviewed. That claim rests on the account holder's report alone and is now recorded
-at that strength - `agent_key_provenance: REPORTED_BY_ACCOUNT_HOLDER_NOT_VISUALLY_CONFIRMED` -
-rather than inheriting the confidence of the block around it. It may well be true further
-down a menu that was not captured. It is not evidence yet.
+**NOT confirmed by looking - and then confirmed, 2026-08-20.** The first review found no
+Agent Key entry and no `Beta` label anywhere in the images, so the claim was downgraded to
+`REPORTED_BY_ACCOUNT_HOLDER_NOT_VISUALLY_CONFIRMED` rather than being allowed to inherit the
+confidence of the confirmed facts around it. A later capture reached the section that had
+been cut off: a `More` group holding **Agent Key** with a **Beta** chip, above University and
+Settings, below a Retirement group holding IRAs. Now `VISUALLY_CONFIRMED`.
+
+Both steps are kept, in `agent_key_provenance_history`. A claim downgraded for lack of
+evidence and later re-established BY evidence is a different object from one that was simply
+asserted throughout, and the difference is the part worth keeping. The downgrade also did
+its job: it was wrong about the world and right about what was known, which is the only
+thing a provenance field can be asked to be.
+
+**The permission sheet, seen.** A bottom sheet headed `Permissions`, one row per permission
+with a check control on the right, all nine checked - the `All (default)` state. It confirms
+the nine labels and their order exactly as recorded.
+
+What it does not show is which of them can be unchecked. All nine render identically when
+checked, so the irreducibility of `View balance & transactions` rests on the interaction
+that tried to remove it and on nothing visible in the list. No future screenshot will settle
+that; only the interaction can. Recorded as
+`permissions_mandatory_visually_distinguishable: false`.
+
+Further menu detail from the same capture: Rewards resolves to `Rewards Hub` and
+`Campaigns`, Retirement to `IRAs`, More to `Agent Key`, `University`, `Settings`. The
+benefits page also carries `IRAs: 1% Roll over` and a Services entry for Crypto.com Travel.
 
 **The Set up screen says nothing about its own consequences.** The primary button reads
 `Generate API key` and is enabled. There is no warning, no irreversibility notice, no
@@ -349,9 +370,10 @@ An absent warning is not a safety claim - the same rule as an absent control not
 statement of scope. Set up is step one of three, and whether the key is created on that
 button or after Verify has not been seen. The button was not pressed.
 
-**Privacy.** The images show an account holder name and email address. Descriptions are
-committed; identifiers are not, and a test asserts the connector declaration contains
-neither.
+**Privacy.** The images show an account holder name, an email address and reward balances.
+Descriptions are committed; identifiers and balances are not. Tests assert the connector
+declaration contains no email pattern, no account holder name and no balance figure. Venue
+configuration numbers - the $1,000 floor, the $1K-$20K slider - are venue facts and stay.
 
 ### Where the residual risk sits, precisely
     credential-level money movement   CAN be excluded - withdrawals, banking, cash
