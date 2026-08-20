@@ -44,6 +44,18 @@ running is a claim about the wrong thing.
 zero book records for three runs while the venue was returning a plain-text message saying
 exactly what was wrong.
 
+## The neighbouring failure, one step further out
+
+A related doctrine was extracted on 2026-08-20 and lives in
+`DOCTRINE_representational_completeness_of_authority.md`. The distinction matters:
+
+    skipped control        the control exists; it did not fire
+    unaccounted authority  there is no control, and nothing indicates one is missing
+
+Everything below applies to the first. The second cannot be caught by testing the path,
+because the path behaves exactly as designed - the gap is in what the representation
+covers, not in what the code does with it.
+
 ## Why this keeps happening here
 
 This stack is mostly controls. A governance layer is a large collection of things that

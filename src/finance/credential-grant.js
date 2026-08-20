@@ -120,6 +120,10 @@ function derivePermittedClasses(requirements, granted) {
  * 2026-08-15 by being echoed where it did not belong. */
 /* Permissions the credential carries that no operation class requires.
  *
+ * DOCTRINE: docs/DOCTRINE_representational_completeness_of_authority.md. Read it before
+ * changing anything below - it records why this must exist and the three states it keeps
+ * apart: mapped and governed, known but unmapped, genuinely unknown.
+ *
  * THE HOLE THIS CLOSES. A grant carrying all nine Crypto.com permissions reports exactly
  * the same three permitted classes as a grant carrying two - because six of the nine map to
  * no class at all, and the firewall only ever asks about classes. `Make cash withdrawals`

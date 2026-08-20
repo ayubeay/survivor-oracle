@@ -55,7 +55,8 @@ explicitly and is not the same as missing information.
     AUTHORITY NO CLASS COVERS IS AUTHORITY NOTHING CHECKS
     ABSENCE OF INPUT IS A REASON TO REFUSE, NOT TO SKIP
 
-Each came from a failure, not an opinion. See `docs/DOCTRINE_skipped_controls.md` and
+Each came from a failure, not an opinion. See `docs/DOCTRINE_skipped_controls.md`,
+`docs/DOCTRINE_representational_completeness_of_authority.md` and
 `docs/INCIDENT_2026-08-08_quota_cascade.md`.
 
 ---
