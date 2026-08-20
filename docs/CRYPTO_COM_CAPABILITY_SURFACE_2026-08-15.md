@@ -390,6 +390,43 @@ Connect, and whether a key carrying only the minimum permissions plus `Execute t
 worth creating while its product scope is unknown. If it cannot be learned without risking
 capital or an overprivileged credential, it stays unknown rather than forced.
 
+### The minimum credential was modelled, and one hole turned up, 2026-08-20
+Before building anything further, the governance model was asked a direct question: can it
+already represent the credential we would actually want - `View balance & transactions` plus
+`Execute trades`, everything else excluded, product scope UNKNOWN, status NOT_YET_ISSUED?
+
+It can, in every respect that was checked:
+
+    granted           the two permissions, nothing else
+    excluded          seven, including Make cash withdrawals
+    permitted_classes OBSERVE_ACCOUNT, MUTATE_ORDER
+    runtime           CREDENTIAL_NOT_ISSUED - it authorises nothing
+    product scope     UNKNOWN, credential bounds nothing, mandate carries it alone
+
+No new abstraction was needed. But asking the inverse question found a real hole.
+
+**A grant carrying all nine permissions reported the same three permitted classes as a
+grant carrying two.** Six of the nine map to no operation class at all - the cash deposit,
+withdrawal, bank account and limits permissions - so the firewall, which only ever asks
+about classes, had nothing to ask. `Make cash withdrawals` sat inside `granted[]` and
+appeared in no other field of the object. Authority the credential carries, that no control
+in the path would ever check, and that no receipt would mention.
+
+A control that is never reached is not a control. This was worse: there was no control to
+miss, and the grant looked complete.
+
+Closed by refusing to declare such a grant silently. Permissions no class requires are
+computed as `unmapped_granted`, and a grant containing any of them needs
+`acknowledge_unaccounted_authority: true` - the same shape as the unbounded-credential
+acknowledgement, for the same reason. Granting them is not forbidden; doing it quietly is.
+The flag rides through to the firewall receipt as
+`credential_carries_unaccounted_authority`, because a receipt that omits it describes a
+narrower key than the one that was used.
+
+Robinhood's grant reports `carries_unaccounted_authority: true` with
+`unmapped_granted: null` - unknowable rather than empty, since a single OAuth scope offers
+no per-permission list to compare against.
+
 ### Still unknown after 2026-08-19
     what a hand-picked permission set is honoured as at execution time
     whether Execute trades spans spot, perpetuals and margin - LOAD-BEARING, and the

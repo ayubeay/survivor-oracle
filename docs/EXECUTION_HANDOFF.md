@@ -25,7 +25,7 @@ distinction exist, because at the venues examined it does not.
 
 Files: `src/finance/connector-capabilities.js`, `credential-grant.js`, `mandate.js`,
 `policy.js`, `execution-authorization.js`, `capability-firewall.js`. Tests:
-`./src/finance/run-tests.sh`, currently 313 passing. **Do not commit unless ALL GREEN.**
+`./src/finance/run-tests.sh`, currently 333 passing. **Do not commit unless ALL GREEN.**
 
 `credential-grant.js` landed 2026-08-19. Authority is a property of the credential, not of
 the connector: two keys at one venue can carry different authority, so a receipt naming only
@@ -52,6 +52,7 @@ explicitly and is not the same as missing information.
     ACCOUNT CAPABILITY IS NOT AGENT-KEY CAPABILITY IS NOT CREDENTIAL GRANT
       IS NOT MANDATE AUTHORITY
     AN ABSENCE OF CONTROLS IS NOT A STATEMENT OF SCOPE
+    AUTHORITY NO CLASS COVERS IS AUTHORITY NOTHING CHECKS
     ABSENCE OF INPUT IS A REASON TO REFUSE, NOT TO SKIP
 
 Each came from a failure, not an opinion. See `docs/DOCTRINE_skipped_controls.md` and
@@ -160,6 +161,23 @@ The checkbox was opened on 2026-08-19: `Execute trades` has no sub-permissions, 
    that tried to remove it and on nothing visible. No screenshot will settle that.
 
    **Still do not create a key. Do not tap Generate.**
+
+   The model was checked against the key we would actually want -
+   `View balance & transactions` + `Execute trades`, everything else excluded, scope
+   UNKNOWN, status NOT_YET_ISSUED - and represents it correctly. Nothing further needs
+   building before a key could be modelled. What is missing is evidence, not mechanism.
+
+   **The next evidence gaps, in order:**
+
+   1. What `Execute trades` spans. One checkbox, no sub-controls, above nine product
+      families. Unknown, and the only thing between here and a decision.
+   2. What Verify and Connect do, and whether Generate is reversible. The Set up screen
+      states nothing. `key_creation_moment` is UNKNOWN.
+   3. Whether the six unaccounted permissions can be left off a real key, and what a
+      hand-picked set is honoured as at execution time. Deselection was observed in the
+      UI; honouring never has been.
+   4. Whether any Crypto.com control refuses anything. Everything remains OBSERVED, and
+      `VERIFIED_ENFORCED` is a state nothing at either venue has reached.
 
 2. **Crypto.com Expiration options.** CLOSED 2026-08-19. Exactly 30, 60 and 90 days, default
    30. Nothing shorter is offered, so venue expiry is an outer wall and the operative expiry

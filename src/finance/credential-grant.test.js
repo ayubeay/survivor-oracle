@@ -1,5 +1,6 @@
 const { declareCredentialGrant, permitsClass, residualClientBounds, revokeCredential,
-        derivePermittedClasses, OPERATION_CLASS, RISK_BEARING_CLASS } = require('./credential-grant');
+        derivePermittedClasses, unmappedPermissions, OPERATION_CLASS,
+        RISK_BEARING_CLASS } = require('./credential-grant');
 const { CLASS, checkToolCall, guardedCall, auditToolList } = require('./capability-firewall');
 const { issueAuthorization, reset } = require('./execution-authorization');
 const { issueMandate, checkAgainstMandate } = require('./mandate');
@@ -56,6 +57,38 @@ t('permits execution', TRADE.permits_execution === true);
 t('still excludes cash withdrawals', TRADE.excluded.indexOf('Make cash withdrawals') !== -1);
 t('withdrawal authority is therefore excludable, not inherent',
   TRADE.granted.indexOf('Make cash withdrawals') === -1 && TRADE.bounded_by_venue === true);
+
+console.log('\nauthority no class covers cannot be granted silently');
+// The hole this closes: a grant carrying all nine reported the SAME three permitted classes
+// as a grant carrying two, because six of the nine map to no class. Make cash withdrawals
+// lived in granted[] and appeared nowhere else in the object.
+t('the minimum grant carries nothing unaccounted', MIN.unmapped_granted.length === 0);
+t('and says so', MIN.carries_unaccounted_authority === false);
+t('the trade grant likewise', TRADE.unmapped_granted.length === 0 &&
+  TRADE.carries_unaccounted_authority === false);
+t('the default grant cannot be declared silently', throws(() => declareCredentialGrant({
+  credential_alias: 'cdc_default', connector: CRYPTO_COM_EXCHANGE,
+  granted: CC.default_grant,
+}), /no operation class requires/));
+t('and the refusal names what would go unchecked', throws(() => declareCredentialGrant({
+  credential_alias: 'cdc_default', connector: CRYPTO_COM_EXCHANGE,
+  granted: CC.default_grant,
+}), /Make cash withdrawals/));
+const ACK = declareCredentialGrant({
+  credential_alias: 'cdc_default_acknowledged', connector: CRYPTO_COM_EXCHANGE,
+  granted: CC.default_grant, acknowledge_unaccounted_authority: true,
+});
+t('acknowledged, it declares', ACK.grant_state === 'OBSERVED_CONFIGURED');
+t('and carries the six unaccounted permissions on its face', ACK.unmapped_granted.length === 6);
+t('including cash withdrawals', ACK.unmapped_granted.indexOf('Make cash withdrawals') !== -1);
+t('flagged rather than buried in granted[]', ACK.carries_unaccounted_authority === true);
+// The point of the flag: these two agree on every class, and differ on what they can do.
+t('it permits the same classes as the narrow key',
+  ACK.permitted_classes.sort().join() === TRADE.permitted_classes.concat(['OBSERVE_MARKET']).sort().join());
+t('so the class list alone could never have told them apart',
+  ACK.carries_unaccounted_authority !== TRADE.carries_unaccounted_authority);
+t('unmappedPermissions is exact',
+  unmappedPermissions({ MUTATE_ORDER: ['a'] }, ['a', 'b']).join() === 'b');
 
 console.log('\nclasses the connector says nothing about are denied, not assumed');
 // Default closed by construction: a class appears only where the connector declares what it
@@ -196,6 +229,18 @@ console.log('\nthe credential constraint survives to the transport');
 
   await guardedCall(tport, 'place_equity_order', ORDER, auth, SNAP, m1, RH);
   t('the correct credential does reach transport', hits.length === 1);
+
+  console.log('\nunaccounted authority reaches the receipt');
+  reset();
+  const mU = MANDATE();
+  const aU = issueAuthorization({ policyReceipt: RECEIPT, order: ORDER,
+                                  capability: 'place_equity_order', mandate: mU,
+                                  credentialGrant: RH });
+  const recU = checkToolCall('place_equity_order', ORDER, aU, SNAP, mU, RH);
+  t('an allow receipt records unaccounted authority',
+    recU.credential_carries_unaccounted_authority === true);
+  t('robinhood carries it because nothing can be narrowed',
+    RH.carries_unaccounted_authority === true && RH.unmapped_granted === null);
 
   console.log('\nreceipts and audits name the credential');
   reset();
@@ -342,6 +387,28 @@ console.log('\nthe credential constraint survives to the transport');
   }, CRYPTO_COM_EXCHANGE);
   t('budget enforcement remains UNVERIFIED', cm.enforcement.total_budget_usd === 'UNVERIFIED');
   t('expiry enforcement remains UNVERIFIED', cm.enforcement.expires_at === 'UNVERIFIED');
+
+  console.log('\nfive provenance levels, still distinct');
+  // Visually confirmed, interaction-observed, inferred, unknown, verified-enforced. They
+  // describe different amounts of knowledge and must not collapse into one another.
+  const AKS = CRYPTO_COM_EXCHANGE.agent_key_setup;
+  t('VISUALLY CONFIRMED  - the beta label and the permission sheet',
+    CC.account_surface.agent_key_provenance === 'VISUALLY_CONFIRMED' &&
+    AKS.permissions_list_visually_confirmed === true);
+  t('INTERACTION OBSERVED - deselection, which no image could show',
+    AKS.permissions_deselection === 'OBSERVED_INDIVIDUALLY_CONFIGURABLE' &&
+    AKS.permissions_mandatory_visually_distinguishable === false);
+  t('INFERRED             - the class mapping, from labels only',
+    CC.class_requirements_state === 'INFERRED_FROM_PERMISSION_LABELS');
+  t('UNKNOWN              - what Execute trades spans, and Generate',
+    CC.product_scope_of_execution === 'UNKNOWN' &&
+    AKS.generate_reversibility === 'UNKNOWN');
+  t('VERIFIED ENFORCED    - reached by nothing, at either venue',
+    TRADE.venue_enforcement === 'UNVERIFIED' && RH.venue_enforcement === 'NONE_EXPOSED');
+  t('and no two of them share a value',
+    new Set([CC.account_surface.agent_key_provenance, AKS.permissions_deselection,
+             CC.class_requirements_state, CC.product_scope_of_execution,
+             TRADE.venue_enforcement]).size === 5);
 
   console.log('\ntemporal expiry reconciliation is reserved, not implemented');
   // venue_expiry_floor_days is declared evidence. Consuming it needs a duration comparison

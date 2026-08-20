@@ -230,7 +230,12 @@ function checkToolCall(toolName, args, authorization, currentSnapshotId, mandate
                 credential and the connector cannot answer it. */
              credential_alias: credentialGrant.credential_alias,
              credential_grant_state: credentialGrant.grant_state,
-             credential_venue_enforcement: credentialGrant.venue_enforcement };
+             credential_venue_enforcement: credentialGrant.venue_enforcement,
+             /* Authority this credential carries that no class check covers. A receipt
+                that omits it would describe a narrower key than the one used. */
+             credential_carries_unaccounted_authority:
+               !!credentialGrant.carries_unaccounted_authority,
+             credential_unaccounted_permissions: credentialGrant.unmapped_granted || null };
   }
   return { ...base, decision: 'DENY', reason: 'PHASE_0_CLASS_DENIED',
            note: cls === CLASS.SIMULATE

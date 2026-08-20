@@ -118,9 +118,28 @@ function derivePermittedClasses(requirements, granted) {
  * Never accepts a secret. A grant names a credential by alias and describes what it may do;
  * the key material itself has no business in an authority object, and a key was exposed on
  * 2026-08-15 by being echoed where it did not belong. */
+/* Permissions the credential carries that no operation class requires.
+ *
+ * THE HOLE THIS CLOSES. A grant carrying all nine Crypto.com permissions reports exactly
+ * the same three permitted classes as a grant carrying two - because six of the nine map to
+ * no class at all, and the firewall only ever asks about classes. `Make cash withdrawals`
+ * sat inside granted[] and appeared in no other field of the object. Authority the
+ * credential carries, that nothing in the path will ever check, and that no receipt
+ * mentions.
+ *
+ * A control that is never reached is not a control. Here there was not even a control to
+ * miss, which is worse, because the grant looked complete. */
+function unmappedPermissions(requirements, granted) {
+  const mapped = {};
+  Object.keys(requirements || {}).forEach(cls =>
+    (requirements[cls] || []).forEach(p => { mapped[p] = true; }));
+  return granted.filter(p => !mapped[p]);
+}
+
 function declareCredentialGrant(spec) {
   const { credential_alias, connector, granted, credential_status,
-          acknowledge_unbounded, observed_at, note } = spec || {};
+          acknowledge_unbounded, acknowledge_unaccounted_authority,
+          observed_at, note } = spec || {};
 
   if (!credential_alias) throw new Error('credential grant requires credential_alias');
   if (!connector) throw new Error('credential grant requires the connector declaration it narrows');
@@ -169,6 +188,11 @@ function declareCredentialGrant(spec) {
       granted: null,
       permitted_classes: OPERATION_CLASS.filter(c => c !== 'UNKNOWN'),
       excluded: null,
+      /* Unknowable rather than empty. The credential carries whatever the venue's single
+         scope covers, and no per-permission list exists to compare against. The
+         acknowledgement above already covers it; a second flag would be ceremony. */
+      unmapped_granted: null,
+      carries_unaccounted_authority: true,
       venue_enforcement: 'NONE_EXPOSED',
       client_enforcement: 'THE_ONLY_BOUND',
       evidence: model.evidence || null,
@@ -202,12 +226,28 @@ function declareCredentialGrant(spec) {
                     '. The issued credential would carry them regardless.');
   }
 
+  /* UNACCOUNTED AUTHORITY MUST BE SAID OUT LOUD, on the same principle as unbounded
+     authority. Granting a permission no class requires is not forbidden - the venue may
+     force it, or an operator may want it - but it cannot happen silently, because nothing
+     downstream will ever mention it again. */
+  const unmapped = unmappedPermissions(model.class_requirements, want);
+  if (unmapped.length && acknowledge_unaccounted_authority !== true) {
+    throw new Error('credential grant carries ' + unmapped.length + ' permission(s) that no ' +
+                    'operation class requires, so no control in the execution path will ' +
+                    'ever check them: ' + unmapped.join(', ') +
+                    '. Pass acknowledge_unaccounted_authority: true to record that ' +
+                    'deliberately, or remove them from the grant.');
+  }
+
   return finalize(Object.assign(base, {
     grant_state: 'OBSERVED_CONFIGURED',
     bounded_by_venue: true,
     granted: want,
     excluded: universe.filter(p => want.indexOf(p) === -1),
     permitted_classes: derivePermittedClasses(model.class_requirements, want),
+    /* Carried on the grant so a receipt can name it. Empty is the answer we want. */
+    unmapped_granted: unmapped,
+    carries_unaccounted_authority: unmapped.length > 0,
     /* The distinction the repository has been holding since the enforcement-granularity
        commit, carried into this object so a receipt cannot lose it. Selecting a permission
        set is something WE did and WE enforce. Whether the venue also refuses what we
@@ -311,5 +351,5 @@ function revokeCredential(grant) {
 }
 
 module.exports = { declareCredentialGrant, permitsClass, residualClientBounds,
-                   derivePermittedClasses, revokeCredential, GRANT_MODEL, GRANT_STATE, OPERATION_CLASS,
+                   derivePermittedClasses, revokeCredential, unmappedPermissions, GRANT_MODEL, GRANT_STATE, OPERATION_CLASS,
                    RISK_BEARING_CLASS, CREDENTIAL_STATUS };
