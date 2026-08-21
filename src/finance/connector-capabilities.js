@@ -186,7 +186,16 @@ const CRYPTO_COM_EXCHANGE_API = {
     'perpetual.execute':     'UNVERIFIED',
     'future.observe':        'AVAILABLE',
     'orderbook.depth':       'AVAILABLE',
-    'sandbox':               'UNVERIFIED',
+    /* Corrected 2026-08-21. UNVERIFIED understated what is known: the Exchange
+       documentation publishes a UAT host, uat-api.3ona.co, alongside the production one.
+       That is a DOCUMENTED fact about the venue and nothing more. It does NOT establish
+       that we can reach it, that any credential we hold qualifies - the venue's own agent
+       repository notes institutional access requires separate credentials - or that
+       anything has ever been executed there. Sandbox EXECUTION remains unverified; only its
+       published existence moved. */
+    'sandbox':               'DOCUMENTED_UAT_HOST_ACCESS_UNVERIFIED',
+    'sandbox_execution':     'UNVERIFIED',
+    'sandbox_eligibility':   'UNKNOWN',
   },
 
   instruments: {

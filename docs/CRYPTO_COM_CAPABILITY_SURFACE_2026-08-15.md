@@ -685,6 +685,23 @@ Two test branches lost their route through `issueMandate` and are now covered by
 connector fixtures rather than being allowed to lapse: the `UNVERIFIED` enforcement state,
 and the reservation that `venue_expiry_floor_days` is declared but not consumed.
 
+### Sandbox, corrected 2026-08-21
+
+`capabilities.sandbox` on the Exchange read `UNVERIFIED`, which understated the evidence -
+the Exchange documentation publishes `uat-api.3ona.co` alongside production. Corrected to
+`DOCUMENTED_UAT_HOST_ACCESS_UNVERIFIED`.
+
+The correction is narrow on purpose. A published host is one claim; three others do not
+follow from it and are recorded separately:
+
+    sandbox              DOCUMENTED_UAT_HOST_ACCESS_UNVERIFIED   the host is published
+    sandbox_execution    UNVERIFIED                              nothing has run there
+    sandbox_eligibility  UNKNOWN                                 the venue agent repository
+                                                                 notes institutional
+                                                                 credentials are required
+
+Understating evidence and overstating it are both errors. This one had been understating.
+
 ### Still unknown after 2026-08-19
     what a hand-picked permission set is honoured as at execution time
     whether Execute trades spans spot, perpetuals and margin - LOAD-BEARING, and the

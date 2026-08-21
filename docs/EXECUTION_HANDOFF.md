@@ -220,8 +220,11 @@ The checkbox was opened on 2026-08-19: `Execute trades` has no sub-permissions, 
       (`credential_grant_model.surface: NOT_CHARACTERISED`).
 
       **Follow-ups recorded, not folded into the split:**
-      - `capabilities.sandbox` on the Exchange still reads `UNVERIFIED`, but a UAT host
-        (`uat-api.3ona.co`) is now DOCUMENTED. Evidence fix, small.
+      - ~~`capabilities.sandbox` on the Exchange reads `UNVERIFIED` against a documented UAT
+        host.~~ CLOSED 2026-08-21: now `DOCUMENTED_UAT_HOST_ACCESS_UNVERIFIED`, with
+        `sandbox_execution: UNVERIFIED` and `sandbox_eligibility: UNKNOWN` beside it. The
+        host is published; reaching it, qualifying for it and executing on it are three
+        separate unestablished claims.
       - `execution-authorization.js` defaults a missing order venue to `'robinhood_agentic'`.
         ACTIVATION CONDITION: before any non-Robinhood execution authorization is issued,
         venue must be explicit and fail closed. With two Crypto.com surfaces now declared,

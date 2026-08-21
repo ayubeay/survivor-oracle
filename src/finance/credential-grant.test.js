@@ -377,6 +377,15 @@ console.log('\nthe credential constraint survives to the transport');
   const xcaps = CRYPTO_COM_EXCHANGE_API.capabilities;
   t('spot execution still unverified', xcaps['spot.execute'] === 'UNVERIFIED');
   t('perpetual execution still unverified', xcaps['perpetual.execute'] === 'UNVERIFIED');
+  // The UAT host is published, so recording sandbox as UNVERIFIED understated the evidence.
+  // Recording it as AVAILABLE would overstate it by a great deal more - we have never
+  // reached it, and the venue notes institutional credentials are needed.
+  t('the exchange sandbox host is documented', xcaps.sandbox === 'DOCUMENTED_UAT_HOST_ACCESS_UNVERIFIED');
+  t('but sandbox execution is not verified', xcaps.sandbox_execution === 'UNVERIFIED');
+  t('and our eligibility for it is unknown', xcaps.sandbox_eligibility === 'UNKNOWN');
+  t('the documented host lives on the venue surface record',
+    CRYPTO_COM_VENUE.execution_surfaces.exchange_api.sandbox_host === 'https://uat-api.3ona.co/exchange/v1/');
+  t('the app surface claims no sandbox at all', caps.sandbox === 'UNKNOWN');
   t('the weekly budget is still only observed', caps.venue_trading_budget.indexOf('OBSERVED') === 0);
   t('key expiry is still only observed', caps.venue_key_expiry.indexOf('OBSERVED') === 0);
   t('key permissions are still only observed', caps.venue_key_permissions.indexOf('OBSERVED') === 0);
