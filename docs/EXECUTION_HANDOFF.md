@@ -25,7 +25,7 @@ distinction exist, because at the venues examined it does not.
 
 Files: `src/finance/connector-capabilities.js`, `credential-grant.js`, `mandate.js`,
 `policy.js`, `execution-authorization.js`, `capability-firewall.js`. Tests:
-`./src/finance/run-tests.sh`, currently 381 passing. **Do not commit unless ALL GREEN.**
+`./src/finance/run-tests.sh`, currently 394 passing. **Do not commit unless ALL GREEN.**
 
 `credential-grant.js` landed 2026-08-19. Authority is a property of the credential, not of
 the connector: two keys at one venue can carry different authority, so a receipt naming only
@@ -202,6 +202,30 @@ The checkbox was opened on 2026-08-19: `Execute trades` has no sub-permissions, 
       declarations, or one `crypto_com` venue carrying `app_agent_key` and
       `exchange_api_key` execution profiles. Choosing needs an audit of what currently
       assumes `CRYPTO_COM_EXCHANGE`. Do that before moving any code.
+
+      **DONE 2026-08-21.** The audit ran, and model C was chosen: shared venue identity,
+      separate execution-surface connectors. `CRYPTO_COM_EXCHANGE` is now
+      `CRYPTO_COM_EXCHANGE_API` and `CRYPTO_COM_APP_AGENT_KEY`, with `CRYPTO_COM_VENUE`
+      holding relationship evidence that belongs to neither. Both surfaces carry
+      `venue: 'crypto_com'`; no registry or composition layer was added, because the runtime
+      consumes connector objects directly.
+
+      The audit found a SECOND contamination nobody had isolated: `reconcileWithConnector`
+      reads `venue_limit_floors` and the `venue_trading_budget` / `venue_key_expiry`
+      capability keys, all App facts, so an Exchange mandate inherited UNVERIFIED enforcement
+      provenance from App credential controls. Now correctly CLIENT_ONLY.
+
+      Both surfaces now fail closed where evidence is missing: App mandates refuse
+      (`instruments.enumeration_state: NOT_ENUMERATED`), Exchange credential grants refuse
+      (`credential_grant_model.surface: NOT_CHARACTERISED`).
+
+      **Follow-ups recorded, not folded into the split:**
+      - `capabilities.sandbox` on the Exchange still reads `UNVERIFIED`, but a UAT host
+        (`uat-api.3ona.co`) is now DOCUMENTED. Evidence fix, small.
+      - `execution-authorization.js` defaults a missing order venue to `'robinhood_agentic'`.
+        ACTIVATION CONDITION: before any non-Robinhood execution authorization is issued,
+        venue must be explicit and fail closed. With two Crypto.com surfaces now declared,
+        a silent default to Robinhood is a misbinding waiting to happen.
    2. What Verify and Connect do, and whether Generate is reversible. The Set up screen
       states nothing. `key_creation_moment` is UNKNOWN.
    3. Whether the six unaccounted permissions can be left off a real key, and what a

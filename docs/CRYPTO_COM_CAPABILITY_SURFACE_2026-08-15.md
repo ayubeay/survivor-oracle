@@ -633,6 +633,58 @@ The repository source is admissible because ownership is pinned to one named rep
 links and calls its own. GitHub is not a trusted domain here, which is why it is recorded in
 `technical_repository_sources` rather than appended to the crypto.com web `sources` list.
 
+### THE SPLIT, 2026-08-21 - and what it was actually fixing
+
+The two surfaces are now two declarations. Until this point everything above lived in one
+object named `CRYPTO_COM_EXCHANGE`, and the cost was not cosmetic.
+
+    crypto_com_exchange_api      930 instruments, 343 perps, 100x, margin pairs
+                                 level-2 book, 0.16bp spread
+                                 spot/perp/future observe, orderbook depth, sandbox
+                                 execution_contracts: still NOT_INVESTIGATED
+                                 credential model: NOT_CHARACTERISED - grants REFUSE
+
+    crypto_com_app_agent_key     agent key setup, the nine permissions
+                                 weekly limit floor, expiry floor
+                                 documented market-only quote/confirm contract
+                                 instruments: NOT_ENUMERATED - mandates REFUSE
+
+    crypto_com (venue)           product_boundary, execution_surfaces,
+                                 credential_model_attribution + history + caveat
+                                 data only - nothing at runtime reads it
+
+**Two live bugs, not one.** The known one: an App Agent Key mandate passed instrument
+reconciliation by borrowing the Exchange's 930-instrument universe. The one found during the
+audit: `reconcileWithConnector` reads `venue_limit_floors` and the `venue_trading_budget` /
+`venue_key_expiry` capability keys - all App facts - so an EXCHANGE mandate was inheriting
+enforcement provenance from App credential controls. It reported UNVERIFIED where the honest
+answer is CLIENT_ONLY, because the Exchange has no such control of its own.
+
+Both directions of contamination, in one function, from one merged object.
+
+**How it happened, which matters more than the mistake.** `git log -S` shows `agent_key`,
+`venue_trading_budget`, `venue_key_expiry`, `venue_key_permissions` and
+`withdrawal_prohibition` all entered in `bf2f328` - "capability declaration from public
+discovery, with seven items marked unverified pending account access." They were never App
+observations. They were correctly-marked placeholders on the Exchange connector, awaiting
+account access. Months later real evidence arrived and filled them - but by then we had
+learned the evidence belonged to a different execution surface.
+
+Nothing was carelessly merged. **A placeholder outlived the assumption that gave it its
+location.** Recorded as history rather than doctrine; if the same shape appears on another
+connector, it will have earned one.
+
+**Consequences, both default-closed.** An App mandate now refuses - `NOT_ENUMERATED` is
+declared explicitly with its reason, because "never enumerated" and "observed none" are
+different claims. An Exchange credential grant now refuses - `NOT_CHARACTERISED` is not a
+surface `declareCredentialGrant` recognises, so it cannot inherit the App's nine-permission
+model. Neither refusal is a regression; both are the layer doing its job on evidence we do
+not have.
+
+Two test branches lost their route through `issueMandate` and are now covered by synthetic
+connector fixtures rather than being allowed to lapse: the `UNVERIFIED` enforcement state,
+and the reservation that `venue_expiry_floor_days` is declared but not consumed.
+
 ### Still unknown after 2026-08-19
     what a hand-picked permission set is honoured as at execution time
     whether Execute trades spans spot, perpetuals and margin - LOAD-BEARING, and the

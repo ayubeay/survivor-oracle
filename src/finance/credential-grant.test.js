@@ -4,13 +4,14 @@ const { declareCredentialGrant, permitsClass, residualClientBounds, revokeCreden
 const { CLASS, checkToolCall, guardedCall, auditToolList } = require('./capability-firewall');
 const { issueAuthorization, reset } = require('./execution-authorization');
 const { issueMandate, checkAgainstMandate } = require('./mandate');
-const { ROBINHOOD_AGENTIC, CRYPTO_COM_EXCHANGE } = require('./connector-capabilities');
+const { ROBINHOOD_AGENTIC, CRYPTO_COM_APP_AGENT_KEY, CRYPTO_COM_EXCHANGE_API,
+        CRYPTO_COM_VENUE } = require('./connector-capabilities');
 
 let pass = 0, fail = 0;
 const t = (n, c) => c ? (pass++, console.log('  ok  ' + n)) : (fail++, console.log('  FAIL ' + n));
 const throws = (fn, re) => { try { fn(); return false; } catch (e) { return re.test(e.message); } };
 
-const CC = CRYPTO_COM_EXCHANGE.credential_grant_model;
+const CC = CRYPTO_COM_APP_AGENT_KEY.credential_grant_model;
 const MANDATORY = CC.mandatory;
 
 console.log('\nthe class vocabulary has not drifted from the firewall');
@@ -24,11 +25,11 @@ t('observation is not', RISK_BEARING_CLASS.indexOf('OBSERVE_MARKET') === -1);
 
 console.log('\na credential narrows a connector, and may not extend it');
 t('inventing a permission is refused', throws(() => declareCredentialGrant({
-  credential_alias: 'k', connector: CRYPTO_COM_EXCHANGE,
+  credential_alias: 'k', connector: CRYPTO_COM_APP_AGENT_KEY,
   granted: MANDATORY.concat(['Withdraw to any address']),
 }), /cannot extend it/));
 t('omitting a mandatory permission is refused', throws(() => declareCredentialGrant({
-  credential_alias: 'k', connector: CRYPTO_COM_EXCHANGE, granted: ['Execute trades'],
+  credential_alias: 'k', connector: CRYPTO_COM_APP_AGENT_KEY, granted: ['Execute trades'],
 }), /does not allow to be removed/));
 t('a connector with no grant model is refused', throws(() => declareCredentialGrant({
   credential_alias: 'k', connector: { connector: 'nameless', capabilities: {} },
@@ -39,7 +40,7 @@ t('an unrecognised surface is refused rather than guessed', throws(() => declare
 
 console.log('\nthe minimum grant crypto.com actually permits');
 const MIN = declareCredentialGrant({
-  credential_alias: 'cdc_min', connector: CRYPTO_COM_EXCHANGE, granted: MANDATORY,
+  credential_alias: 'cdc_min', connector: CRYPTO_COM_APP_AGENT_KEY, granted: MANDATORY,
 });
 t('accepted', MIN.grant_state === 'OBSERVED_CONFIGURED');
 t('carries only the irreducible permission', MIN.granted.join() === 'View balance & transactions');
@@ -50,7 +51,7 @@ t('but does permit account observation', MIN.permitted_classes.indexOf('OBSERVE_
 
 console.log('\nthe narrowest key that could ever trade');
 const TRADE = declareCredentialGrant({
-  credential_alias: 'cdc_trade', connector: CRYPTO_COM_EXCHANGE,
+  credential_alias: 'cdc_trade', connector: CRYPTO_COM_APP_AGENT_KEY,
   granted: MANDATORY.concat(['Execute trades']),
 });
 t('permits execution', TRADE.permits_execution === true);
@@ -67,15 +68,15 @@ t('and says so', MIN.carries_unaccounted_authority === false);
 t('the trade grant likewise', TRADE.unmapped_granted.length === 0 &&
   TRADE.carries_unaccounted_authority === false);
 t('the default grant cannot be declared silently', throws(() => declareCredentialGrant({
-  credential_alias: 'cdc_default', connector: CRYPTO_COM_EXCHANGE,
+  credential_alias: 'cdc_default', connector: CRYPTO_COM_APP_AGENT_KEY,
   granted: CC.default_grant,
 }), /no operation class requires/));
 t('and the refusal names what would go unchecked', throws(() => declareCredentialGrant({
-  credential_alias: 'cdc_default', connector: CRYPTO_COM_EXCHANGE,
+  credential_alias: 'cdc_default', connector: CRYPTO_COM_APP_AGENT_KEY,
   granted: CC.default_grant,
 }), /Make cash withdrawals/));
 const ACK = declareCredentialGrant({
-  credential_alias: 'cdc_default_acknowledged', connector: CRYPTO_COM_EXCHANGE,
+  credential_alias: 'cdc_default_acknowledged', connector: CRYPTO_COM_APP_AGENT_KEY,
   granted: CC.default_grant, acknowledge_unaccounted_authority: true,
 });
 t('acknowledged, it declares', ACK.grant_state === 'OBSERVED_CONFIGURED');
@@ -114,7 +115,7 @@ t('even though the grant itself permits it', TRADE.permits_execution === true);
 // A hypothetical ISSUED credential, so class exclusion can be tested SEPARATELY from
 // status. No Crypto.com key exists; this is a fixture, not a credential.
 const MIN_ISSUED = declareCredentialGrant({
-  credential_alias: 'cdc_min_hypothetical', connector: CRYPTO_COM_EXCHANGE,
+  credential_alias: 'cdc_min_hypothetical', connector: CRYPTO_COM_APP_AGENT_KEY,
   granted: MANDATORY, credential_status: 'ISSUED',
 });
 t('an issued minimum credential still refuses execution on CLASS, not status',
@@ -262,7 +263,7 @@ console.log('\nthe credential constraint survives to the transport');
   t('the class mapping is labelled an inference', TRADE.class_requirements_state === 'INFERRED_FROM_PERMISSION_LABELS');
 
   console.log('\nwhat the credential does NOT bound');
-  const res = residualClientBounds(TRADE, CRYPTO_COM_EXCHANGE);
+  const res = residualClientBounds(TRADE, CRYPTO_COM_APP_AGENT_KEY);
   // Two claims, kept apart on purpose. The UI absence was SEEN; the meaning of the
   // permission was not. Collapsing them turns an observation into an assumption.
   t('the UI exposes no product controls', res.product_scope_controls === 'NOT_EXPOSED_IN_AGENT_KEY_UI');
@@ -305,7 +306,7 @@ console.log('\nthe credential constraint survives to the transport');
     Object.keys(CC.class_requirements).every(k =>
       CC.class_requirements[k].every(p => CC.permissions.indexOf(p) !== -1)));
   t('a grant can never name a product family', throws(() => declareCredentialGrant({
-    credential_alias: 'k', connector: CRYPTO_COM_EXCHANGE,
+    credential_alias: 'k', connector: CRYPTO_COM_APP_AGENT_KEY,
     granted: MANDATORY.concat(['Stocks']),
   }), /cannot extend it/));
   t('no raw screenshot is referenced',
@@ -314,7 +315,7 @@ console.log('\nthe credential constraint survives to the transport');
   console.log('\nno personal identifier reaches the repository');
   // The evidence is photographs of a live personal account showing a name and an email
   // address. Descriptions get committed; identifiers do not.
-  const DECL = JSON.stringify(CRYPTO_COM_EXCHANGE);
+  const DECL = JSON.stringify(CRYPTO_COM_APP_AGENT_KEY);
   t('no email address in the connector declaration', !/[\w.]+@[\w.]+\.\w+/.test(DECL));
   t('no account holder name', !/ayuba|yusuf/i.test(DECL));
   // The later images also show reward balances. Venue configuration figures belong here;
@@ -322,7 +323,7 @@ console.log('\nthe credential constraint survives to the transport');
   t('no account balance figure', !/74\.64/.test(DECL));
 
   console.log('\nthe set up step, seen directly');
-  const KS = CRYPTO_COM_EXCHANGE.agent_key_setup;
+  const KS = CRYPTO_COM_APP_AGENT_KEY.agent_key_setup;
   t('three steps: set up, verify, connect', KS.flow.join() === 'set_up,verify,connect');
   t('the screen calls the artifact an API key', KS.artifact_named === 'API key');
   t('expiration is a single-select radio', KS.expiration_control === 'SINGLE_SELECT_RADIO');
@@ -352,11 +353,11 @@ console.log('\nthe credential constraint survives to the transport');
     CC.minimum_observed_grant.join() === 'View balance & transactions');
   t('eight permissions are removable', CC.permissions.length - CC.mandatory.length === 8);
   t('expiration offers exactly 30, 60 and 90 days',
-    CRYPTO_COM_EXCHANGE.agent_key_setup.expiration_options.join() === '30 days,60 days,90 days');
+    CRYPTO_COM_APP_AGENT_KEY.agent_key_setup.expiration_options.join() === '30 days,60 days,90 days');
   t('nothing shorter than 30 days',
-    CRYPTO_COM_EXCHANGE.agent_key_setup.expiration_shortest_offered === '30 days');
+    CRYPTO_COM_APP_AGENT_KEY.agent_key_setup.expiration_shortest_offered === '30 days');
   t('no instrument granularity is exposed in the agent key UI',
-    CRYPTO_COM_EXCHANGE.agent_key_setup.permissions_instrument_granularity ===
+    CRYPTO_COM_APP_AGENT_KEY.agent_key_setup.permissions_instrument_granularity ===
       'NOT_EXPOSED_IN_AGENT_KEY_UI');
   t('execute trades product scope is unknown, not ALL',
     CC.product_scope_of_execution === 'UNKNOWN');
@@ -372,21 +373,28 @@ console.log('\nthe credential constraint survives to the transport');
   console.log('\nno crypto.com enforcement state was promoted');
   // Reading a settings screen and unchecking boxes proves configurability. It does not make
   // the venue an enforcer, and nothing here may quietly say otherwise.
-  const caps = CRYPTO_COM_EXCHANGE.capabilities;
-  t('spot execution still unverified', caps['spot.execute'] === 'UNVERIFIED');
-  t('perpetual execution still unverified', caps['perpetual.execute'] === 'UNVERIFIED');
+  const caps = CRYPTO_COM_APP_AGENT_KEY.capabilities;
+  const xcaps = CRYPTO_COM_EXCHANGE_API.capabilities;
+  t('spot execution still unverified', xcaps['spot.execute'] === 'UNVERIFIED');
+  t('perpetual execution still unverified', xcaps['perpetual.execute'] === 'UNVERIFIED');
   t('the weekly budget is still only observed', caps.venue_trading_budget.indexOf('OBSERVED') === 0);
   t('key expiry is still only observed', caps.venue_key_expiry.indexOf('OBSERVED') === 0);
   t('key permissions are still only observed', caps.venue_key_permissions.indexOf('OBSERVED') === 0);
   t('withdrawal exclusion is excludable, not proven absent',
     caps.withdrawal_prohibition === 'OBSERVED_EXCLUDABLE_NOT_DEFAULT');
-  const cm = issueMandate({
+  // Since the split this mandate cannot be issued against the App surface at all - its
+  // instrument universe was never enumerated, so reconciliation refuses. That refusal is
+  // the assertion now; enforcement provenance is covered in mandate.test.js per surface.
+  const appMandate = () => issueMandate({
     issuer_identity: 'operator:test', subject_agent: 'a', capabilities: ['crypto.trade'],
-    venues: ['crypto_com_exchange'], capital: { total_budget_usd: 5 },
+    venues: ['crypto_com_app_agent_key'], capital: { total_budget_usd: 5 },
     expires_at: new Date(Date.now() + 86400000).toISOString(),
-  }, CRYPTO_COM_EXCHANGE);
-  t('budget enforcement remains UNVERIFIED', cm.enforcement.total_budget_usd === 'UNVERIFIED');
-  t('expiry enforcement remains UNVERIFIED', cm.enforcement.expires_at === 'UNVERIFIED');
+  }, CRYPTO_COM_APP_AGENT_KEY);
+  t('an app mandate is refused, not silently reconciled',
+    throws(appMandate, /declares no instrument types/));
+  t('the app credential controls are still only observed',
+    caps.venue_trading_budget.indexOf('OBSERVED') === 0 &&
+    caps.venue_key_expiry.indexOf('OBSERVED') === 0);
 
   console.log('\nofficial documentation, 2026-08-21 - DOCUMENTED is not enforcement');
   const DOC = CC.official_documentation;
@@ -425,16 +433,16 @@ console.log('\nthe credential constraint survives to the transport');
   // permission to relax. Robinhood's PRE_AUTHORIZED was recorded from documentation and a
   // five-surface search later found no mechanism behind it.
   t('withdrawal state unchanged by the docs',
-    CRYPTO_COM_EXCHANGE.capabilities.withdrawal_prohibition === 'OBSERVED_EXCLUDABLE_NOT_DEFAULT');
+    CRYPTO_COM_APP_AGENT_KEY.capabilities.withdrawal_prohibition === 'OBSERVED_EXCLUDABLE_NOT_DEFAULT');
   t('nothing promoted to VERIFIED_ENFORCED',
-    !JSON.stringify(CRYPTO_COM_EXCHANGE).includes('VERIFIED_ENFORCED'));
+    !JSON.stringify(CRYPTO_COM_APP_AGENT_KEY).includes('VERIFIED_ENFORCED'));
   t('product scope still UNKNOWN despite the asset-scope statement',
     CC.product_scope_of_execution === 'UNKNOWN');
   t('order-type scope is not product scope',
     DOC.states.order_types === 'MARKET_ONLY' && CC.product_scope_of_execution === 'UNKNOWN');
   t('no default weekly limit is declared, only the range',
-    CRYPTO_COM_EXCHANGE.agent_key_setup.weekly_limit_range_usd.join() === '1000,20000' &&
-    CRYPTO_COM_EXCHANGE.agent_key_setup.weekly_limit_default_usd === undefined);
+    CRYPTO_COM_APP_AGENT_KEY.agent_key_setup.weekly_limit_range_usd.join() === '1000,20000' &&
+    CRYPTO_COM_APP_AGENT_KEY.agent_key_setup.weekly_limit_default_usd === undefined);
 
   console.log('\ncontradictions preserved, not resolved');
   const subj = DOC.contradictions.map(c => c.subject);
@@ -462,17 +470,22 @@ console.log('\nthe credential constraint survives to the transport');
   t('nothing was unreachable', RU.OFFICIAL_SOURCE_UNREACHABLE_FROM_ENVIRONMENT.length === 0);
   t('the three reasons are distinct keys', Object.keys(RU).length === 3);
 
-  console.log('\napp versus exchange: answered at surface level, open as a design decision');
+  console.log('\napp versus exchange: relationship evidence lives on the venue, not a surface');
+  // Hoisted out of the App credential model by the split. Leaving Exchange host and auth
+  // facts inside the App's credential model would have preserved a smaller copy of the bug.
+  const V = CRYPTO_COM_VENUE;
+  t('the app credential model no longer owns exchange facts',
+    CC.execution_surfaces === undefined && CC.credential_model_attribution === undefined);
   t('answered as distinct execution surfaces',
-    CC.credential_model_attribution === 'DISTINCT_EXECUTION_SURFACES');
+    V.credential_model_attribution === 'DISTINCT_EXECUTION_SURFACES');
   t('the earlier unresolved state is kept, not overwritten',
-    CC.credential_model_attribution_history.length === 2 &&
-    /UNRESOLVED_APP_VS_EXCHANGE/.test(CC.credential_model_attribution_history[0]));
+    V.credential_model_attribution_history.length === 2 &&
+    /UNRESOLVED_APP_VS_EXCHANGE/.test(V.credential_model_attribution_history[0]));
   // The caveat is the load-bearing part: two hosts is a surface claim, not an architecture
   // claim. Shared infrastructure beneath them is excluded by nothing we found.
   t('and carries the not-a-backend-claim caveat',
-    CC.credential_model_caveat === 'EXECUTION_SURFACE_CLAIM_NOT_BACKEND_ARCHITECTURE_CLAIM');
-  const ES = CC.execution_surfaces;
+    V.credential_model_caveat === 'EXECUTION_SURFACE_CLAIM_NOT_BACKEND_ARCHITECTURE_CLAIM');
+  const ES = V.execution_surfaces;
   t('two surfaces, two hosts', ES.app_agent_key.host === 'https://wapi.crypto.com' &&
     ES.exchange_api.host === 'https://api.crypto.com/exchange/v1/');
   t('the app host keeps its mediated read path',
@@ -495,14 +508,21 @@ console.log('\nthe credential constraint survives to the transport');
     DOC.technical_repository_sources.owner === 'crypto-com');
   t('and it is kept out of the crypto.com web source list',
     DOC.sources.every(u => u.indexOf('github') === -1));
-  t('the connector still declares the two surfaces differ',
-    CRYPTO_COM_EXCHANGE.product_boundary.app_and_exchange_differ === true);
-  t('and no split has been performed', CRYPTO_COM_EXCHANGE.connector === 'crypto_com_exchange');
+  t('the venue carries the relationship evidence, not either surface',
+    V.product_boundary.app_and_exchange_differ === true &&
+    CRYPTO_COM_APP_AGENT_KEY.product_boundary === undefined &&
+    CRYPTO_COM_EXCHANGE_API.product_boundary === undefined);
+  t('the split has been performed', CRYPTO_COM_APP_AGENT_KEY.connector === 'crypto_com_app_agent_key' &&
+    CRYPTO_COM_EXCHANGE_API.connector === 'crypto_com_exchange_api');
+  t('and the exchange credential model refuses rather than inheriting the app model',
+    CRYPTO_COM_EXCHANGE_API.credential_grant_model.surface === 'NOT_CHARACTERISED' &&
+    throws(() => declareCredentialGrant({ credential_alias: 'x',
+      connector: CRYPTO_COM_EXCHANGE_API }), /refusing rather than guessing/));
 
   console.log('\nfive provenance levels, still distinct');
   // Visually confirmed, interaction-observed, inferred, unknown, verified-enforced. They
   // describe different amounts of knowledge and must not collapse into one another.
-  const AKS = CRYPTO_COM_EXCHANGE.agent_key_setup;
+  const AKS = CRYPTO_COM_APP_AGENT_KEY.agent_key_setup;
   t('VISUALLY CONFIRMED  - the beta label and the permission sheet',
     CC.account_surface.agent_key_provenance === 'VISUALLY_CONFIRMED' &&
     AKS.permissions_list_visually_confirmed === true);
@@ -526,9 +546,23 @@ console.log('\nthe credential constraint survives to the transport');
   // reconcileWithConnector does not have, and it stays unbuilt until its activation
   // condition - a VERIFIED expiry control - is met. This test exists so that stays true on
   // purpose rather than by neglect.
-  t('the floor is declared', CRYPTO_COM_EXCHANGE.venue_expiry_floor_days === 30);
-  t('and is not consumed by reconciliation', cm.enforcement.expires_at !== 'VENUE_BACKSTOP' &&
-    cm.enforcement.expires_at !== 'VENUE_ALIGNED');
+  t('the floor is declared', CRYPTO_COM_APP_AGENT_KEY.venue_expiry_floor_days === 30);
+  // The floor lives on the app surface, where reconciliation now refuses on instruments, so
+  // no real app mandate can exercise this path. Synthetic connector mirroring the app's
+  // expiry declaration, so the reservation stays tested instead of passing vacuously.
+  const expiryFixture = { connector: 'synthetic_expiry_venue',
+    capabilities: { venue_key_expiry: 'OBSERVED_CONFIGURABLE_MIN_30_DAYS' },
+    venue_expiry_floor_days: 30,
+    instruments: { by_type: { CCY_PAIR: 1 } } };
+  const xm = issueMandate({
+    issuer_identity: 'operator:test', subject_agent: 'a', capabilities: ['crypto.trade'],
+    venues: ['synthetic_expiry_venue'], capital: { total_budget_usd: 5 },
+    expires_at: new Date(Date.now() + 86400000).toISOString(),
+  }, expiryFixture);
+  t('and is not consumed by reconciliation', xm.enforcement.expires_at !== 'VENUE_BACKSTOP' &&
+    xm.enforcement.expires_at !== 'VENUE_ALIGNED');
+  t('it short-circuits to UNVERIFIED while the control is only OBSERVED',
+    xm.enforcement.expires_at === 'UNVERIFIED');
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

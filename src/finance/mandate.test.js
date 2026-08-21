@@ -59,12 +59,12 @@ console.log('\ninstrument type and leverage - crypto.com has 50x perps');
 // leveraged exposure by omission. Spot at 1x is the default; leverage must be granted.
 const cryptoM = issueMandate({
   issuer_identity: 'operator:test', subject_agent: 'crypto_sniper',
-  capabilities: ['crypto.trade'], venues: ['crypto_com_exchange'],
+  capabilities: ['crypto.trade'], venues: ['crypto_com_exchange_api'],
   capital: { total_budget_usd: 5, max_order_usd: 2 },
   expires_at: new Date(Date.now() + 86400000).toISOString(),
 });
 const cchk = (o) => checkAgainstMandate({ mandate: cryptoM, order: o,
-  capability: 'crypto.trade', venue: 'crypto_com_exchange', deployed_usd: 0 });
+  capability: 'crypto.trade', venue: 'crypto_com_exchange_api', deployed_usd: 0 });
 t('spot permitted by default', cchk({ symbol:'BTC_USD', notional_usd:1 }).within_mandate === true);
 t('perp refused on type', cchk({ symbol:'BTCUSD-PERP', notional_usd:1,
   instrument_type:'PERPETUAL_SWAP', leverage:50 }).code === 'INSTRUMENT_TYPE_NOT_MANDATED');
@@ -73,13 +73,13 @@ t('margin refused on leverage', cchk({ symbol:'BTC_USD', notional_usd:1, leverag
 
 const levM = issueMandate({
   issuer_identity: 'operator:test', subject_agent: 'crypto_sniper',
-  capabilities: ['crypto.trade'], venues: ['crypto_com_exchange'],
+  capabilities: ['crypto.trade'], venues: ['crypto_com_exchange_api'],
   capital: { total_budget_usd: 5, max_order_usd: 2 },
   instruments: { allowed_types: ['SPOT','PERPETUAL_SWAP'], max_leverage: 3 },
   expires_at: new Date(Date.now() + 86400000).toISOString(),
 });
 const lchk = (o) => checkAgainstMandate({ mandate: levM, order: o,
-  capability: 'crypto.trade', venue: 'crypto_com_exchange', deployed_usd: 0 });
+  capability: 'crypto.trade', venue: 'crypto_com_exchange_api', deployed_usd: 0 });
 t('granted type is permitted', lchk({ symbol:'BTCUSD-PERP', notional_usd:1,
   instrument_type:'PERPETUAL_SWAP', leverage:2 }).within_mandate === true);
 t('but only up to the granted leverage', lchk({ symbol:'BTCUSD-PERP', notional_usd:1,
@@ -90,17 +90,40 @@ console.log('\nreconciliation against a connector declaration');
 // perpetual swaps was accepted against an equities-only broker - the instrument-type check
 // skipped silently because that connector declared no instrument block. A control that does
 // not run is indistinguishable from one that passed.
-const { CRYPTO_COM_EXCHANGE, ROBINHOOD_AGENTIC } = require('./connector-capabilities');
+const { CRYPTO_COM_EXCHANGE_API, CRYPTO_COM_APP_AGENT_KEY,
+        ROBINHOOD_AGENTIC } = require('./connector-capabilities');
 const mk = (v, inst) => ({ issuer_identity:'op', subject_agent:'a', capabilities:['trade'],
   venues:[v], capital:{ total_budget_usd: 5 }, instruments: inst,
   expires_at: new Date(Date.now()+86400000).toISOString() });
 const accepts = (fn) => { try { fn(); return true; } catch (e) { return false; } };
 
-t('spot on crypto.com accepted', accepts(() => issueMandate(mk('crypto_com_exchange'), CRYPTO_COM_EXCHANGE)));
-t('perps at 3x on crypto.com accepted', accepts(() => issueMandate(
-  mk('crypto_com_exchange', { allowed_types:['PERPETUAL_SWAP'], max_leverage:3 }), CRYPTO_COM_EXCHANGE)));
+t('spot on the crypto.com EXCHANGE accepted', accepts(() => issueMandate(
+  mk('crypto_com_exchange_api'), CRYPTO_COM_EXCHANGE_API)));
+t('perps at 3x on the exchange accepted', accepts(() => issueMandate(
+  mk('crypto_com_exchange_api', { allowed_types:['PERPETUAL_SWAP'], max_leverage:3 }), CRYPTO_COM_EXCHANGE_API)));
 t('200x refused - beyond venue maximum', !accepts(() => issueMandate(
-  mk('crypto_com_exchange', { max_leverage:200 }), CRYPTO_COM_EXCHANGE)));
+  mk('crypto_com_exchange_api', { max_leverage:200 }), CRYPTO_COM_EXCHANGE_API)));
+
+// THE SPLIT, 2026-08-21. Until then these two surfaces were one declaration named for the
+// Exchange, and an App Agent Key mandate passed instrument reconciliation by borrowing the
+// Exchange's 930 instruments. The App surface has never had its universe enumerated, so it
+// must refuse - default closed, not silently permissive.
+t('spot on the APP AGENT KEY refused - instrument universe not enumerated',
+  !accepts(() => issueMandate(mk('crypto_com_app_agent_key'), CRYPTO_COM_APP_AGENT_KEY)));
+t('perps on the app agent key refused too', !accepts(() => issueMandate(
+  mk('crypto_com_app_agent_key', { allowed_types:['PERPETUAL_SWAP'] }), CRYPTO_COM_APP_AGENT_KEY)));
+t('the app declares NOT_ENUMERATED rather than an empty universe',
+  CRYPTO_COM_APP_AGENT_KEY.instruments.enumeration_state === 'NOT_ENUMERATED' &&
+  CRYPTO_COM_APP_AGENT_KEY.instruments.by_type === undefined);
+t('and says explicitly that it did not borrow the exchange universe',
+  CRYPTO_COM_APP_AGENT_KEY.instruments.borrowed_from_exchange === false);
+t('exchange instrument facts appear nowhere on the app declaration',
+  JSON.stringify(CRYPTO_COM_APP_AGENT_KEY).indexOf('930') === -1 &&
+  CRYPTO_COM_APP_AGENT_KEY.instruments.max_leverage_observed === null);
+t('both surfaces still share one venue identity',
+  CRYPTO_COM_EXCHANGE_API.venue === 'crypto_com' &&
+  CRYPTO_COM_APP_AGENT_KEY.venue === 'crypto_com' &&
+  CRYPTO_COM_EXCHANGE_API.connector !== CRYPTO_COM_APP_AGENT_KEY.connector);
 
 t('equity on robinhood accepted', accepts(() => issueMandate(
   mk('robinhood_agentic', { allowed_types:['EQUITY'] }), ROBINHOOD_AGENTIC)));
@@ -114,20 +137,38 @@ t('a connector declaring nothing is refused, not skipped', !accepts(() => issueM
   mk('x'), { connector:'x', capabilities:{} })));
 
 console.log('\nenforcement provenance');
-const cm = issueMandate(mk('crypto_com_exchange'), CRYPTO_COM_EXCHANGE);
-// Crypto.com's weekly limit was seen in a settings screen, never observed rejecting
-// anything. A control whose existence is observed but whose enforcement is untested is
-// UNVERIFIED - not CLIENT_ONLY, which would understate it, and not VENUE_BACKSTOP, which
-// would claim enforcement we have not seen.
-t('observed but untested venue controls are UNVERIFIED',
-  cm.enforcement.total_budget_usd === 'UNVERIFIED');
-t('so is expiry', cm.enforcement.expires_at === 'UNVERIFIED');
+const cm = issueMandate(mk('crypto_com_exchange_api'), CRYPTO_COM_EXCHANGE_API);
+// CHANGED BY THE SPLIT. The weekly budget and key expiry are APP Agent Key controls. Before
+// 2026-08-21 they sat on the Exchange declaration and an Exchange mandate inherited
+// UNVERIFIED provenance from credential controls belonging to another surface. The Exchange
+// has no such control of its own, so CLIENT_ONLY is the honest state.
+t('the exchange no longer inherits app budget provenance',
+  cm.enforcement.total_budget_usd === 'CLIENT_ONLY');
+t('nor app expiry provenance', cm.enforcement.expires_at === 'CLIENT_ONLY');
+t('because the exchange declares neither control',
+  CRYPTO_COM_EXCHANGE_API.capabilities.venue_trading_budget === undefined &&
+  CRYPTO_COM_EXCHANGE_API.capabilities.venue_key_expiry === undefined);
+t('while the app still declares both, observed',
+  CRYPTO_COM_APP_AGENT_KEY.capabilities.venue_trading_budget.indexOf('OBSERVED') === 0 &&
+  CRYPTO_COM_APP_AGENT_KEY.capabilities.venue_key_expiry.indexOf('OBSERVED') === 0);
+
+// The UNVERIFIED branch lost its only route through issueMandate when the surfaces split:
+// the connector that declares those controls now refuses on instruments before enforcement
+// is computed. Synthetic fixture, so the branch keeps coverage rather than quietly lapsing.
+const synthetic = { connector: 'synthetic_venue',
+  capabilities: { venue_trading_budget: 'OBSERVED_WEEKLY_WITH_REMAINING',
+                  venue_key_expiry: 'OBSERVED_CONFIGURABLE_MIN_30_DAYS' },
+  instruments: { by_type: { CCY_PAIR: 1 } } };
+const sm = issueMandate(mk('synthetic_venue'), synthetic);
+t('observed but untested venue controls are still UNVERIFIED',
+  sm.enforcement.total_budget_usd === 'UNVERIFIED');
+t('so is expiry', sm.enforcement.expires_at === 'UNVERIFIED');
 
 // Robinhood exposes no equivalent control at all - a different state from unverified.
 const rm = issueMandate(mk('robinhood_agentic', { allowed_types:['EQUITY'] }), ROBINHOOD_AGENTIC);
 t('a venue with no such control is CLIENT_ONLY',
   rm.enforcement.total_budget_usd === 'CLIENT_ONLY');
-t('records what it was reconciled against', cm.reconciled_against === 'crypto_com_exchange');
+t('records what it was reconciled against', cm.reconciled_against === 'crypto_com_exchange_api');
 
 console.log('\nlifecycle and revocation');
 let m = base();

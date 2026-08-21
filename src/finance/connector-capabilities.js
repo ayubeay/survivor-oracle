@@ -172,8 +172,9 @@ function verifyNoMutation(before, after) {
  * trading-only credentials, but that is a different product from a US App account, and the
  * Robinhood investigation already showed what happens when documentation is read as
  * capability. */
-const CRYPTO_COM_EXCHANGE = {
-  connector: 'crypto_com_exchange',
+const CRYPTO_COM_EXCHANGE_API = {
+  connector: 'crypto_com_exchange_api',
+  venue: 'crypto_com',
   endpoint: 'https://api.crypto.com/exchange/v1',
   observed_at: '2026-08-15',
   observation_scope: 'PUBLIC_ENDPOINTS_ONLY',
@@ -185,6 +186,77 @@ const CRYPTO_COM_EXCHANGE = {
     'perpetual.execute':     'UNVERIFIED',
     'future.observe':        'AVAILABLE',
     'orderbook.depth':       'AVAILABLE',
+    'sandbox':               'UNVERIFIED',
+  },
+
+  instruments: {
+    total: 930,
+    by_type: { CCY_PAIR: 577, PERPETUAL_SWAP: 343, FUTURE: 10 },
+    untradable: 0,
+    quote_currencies: ['USD', 'USDT', 'BTC', 'EUR', 'PYUSD', 'CRO', 'ETH'],
+    /* The reason the mandate grew leverage bounds. A venue offering 50x on 341 instruments
+       makes "permitted to trade crypto" an unsafe grant without an instrument-type bound. */
+    max_leverage_observed: 100,
+    perps_at_50x: 341,
+    perps_at_100x: 2,
+    spot_pairs_with_margin: 144,
+    per_instrument_fields: ['max_leverage', 'margin_buy_enabled', 'margin_sell_enabled',
+                            'contract_size', 'underlying_symbol', 'expiry_timestamp_ms',
+                            'price_tick_size', 'qty_tick_size', 'tradable'],
+  },
+
+  market_data: {
+    depth: 'level_2_with_order_count',   // [price, size, order_count] per level
+    depth_levels_observed: 10,
+    spread_observed_bps: 0.16,           // BTC_USD, one cent on $63,097
+    note: 'AAPL measured 2-3bp on Robinhood. Materially tighter microstructure here.',
+  },
+
+  execution_contracts: {
+    UNKNOWN: {
+      status: 'NOT_INVESTIGATED',
+      note: 'No authenticated surface examined. Whether Crypto.com requires confirmation, ' +
+            'permits standing mandates, or enforces budgets at the credential is unknown.',
+    },
+  },
+
+  /* No characterised credential model. The Exchange uses classic API keys created through
+     Account Management -> API Management, with Can Read and Enable Trading - seen in an
+     announcement, never enumerated. NOT_CHARACTERISED is not a surface declareCredentialGrant
+     recognises, so a grant against this connector REFUSES rather than inheriting the App
+     Agent Key model. That refusal is the point. */
+  credential_grant_model: {
+    surface: 'NOT_CHARACTERISED',
+    observed_at: null,
+    evidence: 'Can Read and Enable Trading named in the Exchange OpenClaw announcement. ' +
+              'No permission enumeration, no defaults, no mandatory set established.',
+  },
+};
+
+/* ---------------------------------------------------------------------------------------
+   Crypto.com App Agent Key - a DIFFERENT execution surface from the Exchange API above.
+
+   Split out 2026-08-21. Until then both lived in one declaration named for the Exchange,
+   and the consequence was not cosmetic: an App mandate passed instrument reconciliation by
+   borrowing the Exchange's 930-instrument universe, and an Exchange mandate inherited
+   enforcement provenance from App credential controls.
+
+   HOW THAT HAPPENED, because the mechanism matters more than the mistake. The Exchange
+   declaration was built from public discovery in bf2f328 and correctly marked seven items
+   UNVERIFIED, pending account access. Months later real evidence arrived and filled those
+   placeholders - but by then we had learned the evidence belonged to a different execution
+   surface. A placeholder outlived the assumption that gave it its location. Nothing was
+   carelessly merged; a correctly-marked gap was filled from the wrong side.
+   --------------------------------------------------------------------------------------- */
+const CRYPTO_COM_APP_AGENT_KEY = {
+  connector: 'crypto_com_app_agent_key',
+  venue: 'crypto_com',
+  endpoint: 'https://wapi.crypto.com',
+  endpoint_provenance: 'DOCUMENTED_VIA_SUMMARISING_FETCH_LAYER',
+  observed_at: '2026-08-19',
+  observation_scope: 'ACCOUNT_UI_INTERACTION_AND_OFFICIAL_DOCUMENTATION',
+
+  capabilities: {
     /* Observed in the US App account on 2026-08-15. The Agent Key screen offers
        Expiration, Permissions and a Weekly trading limit with a Remaining counter - so the
        venue tracks consumption, not merely a configured ceiling.
@@ -208,7 +280,39 @@ const CRYPTO_COM_EXCHANGE = {
        because the exclusion was seen in the setup UI and has never been seen to hold
        against an actual withdrawal attempt. */
     'withdrawal_prohibition':'OBSERVED_EXCLUDABLE_NOT_DEFAULT',
-    'sandbox':               'UNVERIFIED',
+    'sandbox':               'UNKNOWN',
+  },
+
+  /* NOT ENUMERATED, which is a different claim from observing none.
+     No instrument list has ever been retrieved for this surface. The documentation says
+     cryptocurrency trading and 200+ tokens and stops there. by_type is deliberately absent
+     rather than empty, so reconcileWithConnector REFUSES a mandate here instead of
+     accepting one against a universe nobody measured.
+     It must NOT inherit the Exchange's 930 instruments, 343 perps or 100x leverage. Those
+     came from Exchange public endpoints and say nothing about what an Agent Key can reach. */
+  instruments: {
+    enumeration_state: 'NOT_ENUMERATED',
+    reason: 'no instrument endpoint has been called on this surface with or without a ' +
+            'credential; the venue documents cryptocurrency trading and 200+ tokens and ' +
+            'characterises no universe',
+    borrowed_from_exchange: false,
+    max_leverage_observed: null,
+  },
+
+  /* Only what the documentation supports. Deliberately NOT reusing Robinhood's REVIEWED or
+     PRE_AUTHORIZED, whose meanings this evidence does not establish. */
+  execution_contracts: {
+    DOCUMENTED_MARKET_ONLY_QUOTE_CONFIRM: {
+      sequence: ['quote', 'confirm'],
+      order_types: 'MARKET_ONLY',
+      asset_scope: 'CRYPTOCURRENCY_ONLY_MORE_ASSET_TYPES_TO_COME',
+      confirmation: 'AGENT_SIDE_CLIENT_SETTING_NOT_VENUE_CONTROL',
+      confirmation_note: 'the venue skill defaults to requiring user confirmation and ' +
+                         'exposes opt-out to auto-execution; this is client-side and must ' +
+                         'not be read as a venue-enforced approval step',
+      provenance: 'DOCUMENTED',
+      enforcement_claim: 'NONE',
+    },
   },
 
   /* The weekly trading limit slider starts at $1,000 - OBSERVED in the setup UI, not
@@ -673,80 +777,6 @@ const CRYPTO_COM_EXCHANGE = {
       },
     },
 
-    /* UNRESOLVED ARCHITECTURAL QUESTION, opened 2026-08-21. Recorded rather than fixed.
-     *
-     * Crypto.com documents two DIFFERENT credential systems:
-     *
-     *   App      Agent Key, under More, Beta, the nine-permission screen observed here,
-     *            documented only for the OpenClaw integration
-     *   Exchange classic API keys via Account Management -> API Management, with
-     *            Can Read / Enable Trading, and no Agent Key feature referenced at all
-     *
-     * This declaration is CRYPTO_COM_EXCHANGE, endpointed at api.crypto.com/exchange/v1,
-     * and carries an App-derived credential model - while its own product_boundary already
-     * says the App and the Exchange are different universes.
-     *
-     * The tension predates this research; the documentation makes it concrete. Whether it
-     * needs two connectors (crypto_com_app_agent_key and crypto_com_exchange_api) or merely
-     * credential profiles within one turns on a question nobody has answered: do App Agent
-     * Keys call the Exchange API surface, or a different backend?
-     *
-     * DO NOT refactor on the strength of the question alone. Answer it first. */
-    /* ANSWERED 2026-08-21, second pass, and the question above is left standing because
-       the sequence is the useful part.
-
-       Crypto.com-owned technical material settles it at the level a connector models. The
-       venue ships ONE repository containing TWO separate skills:
-
-         crypto-com-app        host wapi.crypto.com, credentials CDC_API_KEY/CDC_API_SECRET
-                               taken from the Agent Key management guide, two-step
-                               quote-then-confirm trade flow, plus fiat, bank account and
-                               withdrawal capability families
-         crypto-com-exchange   host api.crypto.com/exchange/v1, Exchange API credentials,
-                               private/create-order with amend and cancel, LIMIT and MARKET
-
-       And the Exchange REST/WS documentation mentions Agent Key, agent, OpenClaw and the
-       Crypto.com App exactly nowhere.
-
-       DISTINCT_EXECUTION_SURFACES is a claim about hosts, credentials, method vocabularies
-       and capability families - the things a connector declaration models. It is NOT proof
-       that crypto.com runs separate internal backends. Shared infrastructure behind two
-       gateways is excluded by nothing found, and no source addresses it. Whether an App
-       Agent Key would authenticate against an Exchange endpoint is likewise unestablished.
-
-       The DESIGN decision this unblocks is still open: two connector declarations, or one
-       crypto_com venue carrying app_agent_key and exchange_api_key execution profiles.
-       That needs an audit of what currently assumes CRYPTO_COM_EXCHANGE. Not this commit. */
-    credential_model_attribution: 'DISTINCT_EXECUTION_SURFACES',
-    credential_model_attribution_history: [
-      '2026-08-21 UNRESOLVED_APP_VS_EXCHANGE - documentation described both, related neither',
-      '2026-08-21 DISTINCT_EXECUTION_SURFACES - venue-owned agent repository ships two ' +
-        'skills with different hosts, credentials, methods and capability families',
-    ],
-    credential_model_caveat: 'EXECUTION_SURFACE_CLAIM_NOT_BACKEND_ARCHITECTURE_CLAIM',
-    execution_surfaces: {
-      app_agent_key: {
-        host: 'https://wapi.crypto.com',
-        host_provenance: 'DOCUMENTED_VIA_SUMMARISING_FETCH_LAYER',
-        credential_env: ['CDC_API_KEY', 'CDC_API_SECRET'],
-        order_model: 'two-step quote then confirm',
-        capability_families: ['trading', 'balances', 'transaction history', 'fiat and cash',
-                              'bank account management', 'deposits', 'withdrawals',
-                              'weekly trading limit retrieval', 'API key revocation'],
-      },
-      exchange_api: {
-        host: 'https://api.crypto.com/exchange/v1/',
-        host_provenance: 'DOCUMENTED_QUOTED_DIRECTLY',
-        sandbox_host: 'https://uat-api.3ona.co/exchange/v1/',
-        auth: 'api_key plus HMAC-SHA256 sig plus nonce',
-        order_methods: ['private/create-order', 'private/create-order-list'],
-        order_types: 'LIMIT and MARKET, with amend and cancel',
-        mentions_agent_key: false,
-      },
-      app_key_accepted_by_exchange_endpoints: 'UNKNOWN',
-      shared_backend_beneath_hosts: 'UNKNOWN',
-    },
-
     evidence: 'Setup screen read 2026-08-15 and worked through box by box 2026-08-19 by ' +
               'the account holder. Eight of nine permissions uncheck, including Make cash ' +
               'withdrawals and Execute trades; View balance & transactions will not. ' +
@@ -754,28 +784,21 @@ const CRYPTO_COM_EXCHANGE = {
               'documentation read 2026-08-21 - see official_documentation.',
   },
 
-  instruments: {
-    total: 930,
-    by_type: { CCY_PAIR: 577, PERPETUAL_SWAP: 343, FUTURE: 10 },
-    untradable: 0,
-    quote_currencies: ['USD', 'USDT', 'BTC', 'EUR', 'PYUSD', 'CRO', 'ETH'],
-    /* The reason the mandate grew leverage bounds. A venue offering 50x on 341 instruments
-       makes "permitted to trade crypto" an unsafe grant without an instrument-type bound. */
-    max_leverage_observed: 100,
-    perps_at_50x: 341,
-    perps_at_100x: 2,
-    spot_pairs_with_margin: 144,
-    per_instrument_fields: ['max_leverage', 'margin_buy_enabled', 'margin_sell_enabled',
-                            'contract_size', 'underlying_symbol', 'expiry_timestamp_ms',
-                            'price_tick_size', 'qty_tick_size', 'tradable'],
-  },
+};
 
-  market_data: {
-    depth: 'level_2_with_order_count',   // [price, size, order_count] per level
-    depth_levels_observed: 10,
-    spread_observed_bps: 0.16,           // BTC_USD, one cent on $63,097
-    note: 'AAPL measured 2-3bp on Robinhood. Materially tighter microstructure here.',
-  },
+/* ---------------------------------------------------------------------------------------
+   Venue identity. Relationship evidence that belongs to NEITHER surface.
+
+   Data only. Nothing at runtime reads this - no registry, no lookup, no composition. It
+   exists so cross-surface facts have a home that is not one surface's credential model,
+   because leaving Exchange host and auth facts inside the App's credential_grant_model
+   would preserve a smaller copy of the bug this split removes.
+   --------------------------------------------------------------------------------------- */
+const CRYPTO_COM_VENUE = {
+  venue: 'crypto_com',
+  operator: 'Crypto.com',
+  surfaces: ['crypto_com_exchange_api', 'crypto_com_app_agent_key'],
+  shared_venue_identity_does_not_share_authority: true,
 
   /* The App and the Exchange are different products with different universes. BNB is held
      in the App and absent from the Exchange instrument list. Same lesson as Robinhood's
@@ -785,14 +808,82 @@ const CRYPTO_COM_EXCHANGE = {
     evidence: 'BNB held in the App, NOT LISTED on the Exchange. CAW and VVS are listed.',
   },
 
-  execution_contracts: {
-    UNKNOWN: {
-      status: 'NOT_INVESTIGATED',
-      note: 'No authenticated surface examined. Whether Crypto.com requires confirmation, ' +
-            'permits standing mandates, or enforces budgets at the credential is unknown.',
+  /* UNRESOLVED ARCHITECTURAL QUESTION, opened 2026-08-21. Recorded rather than fixed.
+   *
+   * Crypto.com documents two DIFFERENT credential systems:
+   *
+   *   App      Agent Key, under More, Beta, the nine-permission screen observed here,
+   *            documented only for the OpenClaw integration
+   *   Exchange classic API keys via Account Management -> API Management, with
+   *            Can Read / Enable Trading, and no Agent Key feature referenced at all
+   *
+   * This declaration is CRYPTO_COM_EXCHANGE, endpointed at api.crypto.com/exchange/v1,
+   * and carries an App-derived credential model - while its own product_boundary already
+   * says the App and the Exchange are different universes.
+   *
+   * The tension predates this research; the documentation makes it concrete. Whether it
+   * needs two connectors (crypto_com_app_agent_key and crypto_com_exchange_api) or merely
+   * credential profiles within one turns on a question nobody has answered: do App Agent
+   * Keys call the Exchange API surface, or a different backend?
+   *
+   * DO NOT refactor on the strength of the question alone. Answer it first. */
+  /* ANSWERED 2026-08-21, second pass, and the question above is left standing because
+     the sequence is the useful part.
+
+     Crypto.com-owned technical material settles it at the level a connector models. The
+     venue ships ONE repository containing TWO separate skills:
+
+       crypto-com-app        host wapi.crypto.com, credentials CDC_API_KEY/CDC_API_SECRET
+                             taken from the Agent Key management guide, two-step
+                             quote-then-confirm trade flow, plus fiat, bank account and
+                             withdrawal capability families
+       crypto-com-exchange   host api.crypto.com/exchange/v1, Exchange API credentials,
+                             private/create-order with amend and cancel, LIMIT and MARKET
+
+     And the Exchange REST/WS documentation mentions Agent Key, agent, OpenClaw and the
+     Crypto.com App exactly nowhere.
+
+     DISTINCT_EXECUTION_SURFACES is a claim about hosts, credentials, method vocabularies
+     and capability families - the things a connector declaration models. It is NOT proof
+     that crypto.com runs separate internal backends. Shared infrastructure behind two
+     gateways is excluded by nothing found, and no source addresses it. Whether an App
+     Agent Key would authenticate against an Exchange endpoint is likewise unestablished.
+
+     The DESIGN decision this unblocks is still open: two connector declarations, or one
+     crypto_com venue carrying app_agent_key and exchange_api_key execution profiles.
+     That needs an audit of what currently assumes CRYPTO_COM_EXCHANGE. Not this commit. */
+  credential_model_attribution: 'DISTINCT_EXECUTION_SURFACES',
+  credential_model_attribution_history: [
+    '2026-08-21 UNRESOLVED_APP_VS_EXCHANGE - documentation described both, related neither',
+    '2026-08-21 DISTINCT_EXECUTION_SURFACES - venue-owned agent repository ships two ' +
+      'skills with different hosts, credentials, methods and capability families',
+  ],
+  credential_model_caveat: 'EXECUTION_SURFACE_CLAIM_NOT_BACKEND_ARCHITECTURE_CLAIM',
+  execution_surfaces: {
+    app_agent_key: {
+      host: 'https://wapi.crypto.com',
+      host_provenance: 'DOCUMENTED_VIA_SUMMARISING_FETCH_LAYER',
+      credential_env: ['CDC_API_KEY', 'CDC_API_SECRET'],
+      order_model: 'two-step quote then confirm',
+      capability_families: ['trading', 'balances', 'transaction history', 'fiat and cash',
+                            'bank account management', 'deposits', 'withdrawals',
+                            'weekly trading limit retrieval', 'API key revocation'],
     },
+    exchange_api: {
+      host: 'https://api.crypto.com/exchange/v1/',
+      host_provenance: 'DOCUMENTED_QUOTED_DIRECTLY',
+      sandbox_host: 'https://uat-api.3ona.co/exchange/v1/',
+      auth: 'api_key plus HMAC-SHA256 sig plus nonce',
+      order_methods: ['private/create-order', 'private/create-order-list'],
+      order_types: 'LIMIT and MARKET, with amend and cancel',
+      mentions_agent_key: false,
+    },
+    app_key_accepted_by_exchange_endpoints: 'UNKNOWN',
+    shared_backend_beneath_hosts: 'UNKNOWN',
   },
+
 };
 
-module.exports = { ROBINHOOD_AGENTIC, CRYPTO_COM_EXCHANGE, AUTONOMY, autonomyFor,
+module.exports = { ROBINHOOD_AGENTIC, CRYPTO_COM_EXCHANGE_API,
+                   CRYPTO_COM_APP_AGENT_KEY, CRYPTO_COM_VENUE, AUTONOMY, autonomyFor,
                    orderStateFingerprint, verifyNoMutation };
