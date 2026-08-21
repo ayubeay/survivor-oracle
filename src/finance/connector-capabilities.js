@@ -538,6 +538,25 @@ const CRYPTO_COM_EXCHANGE = {
         'crypto.com/en/product-news/cryptocom-exchange-openclaw-ai-agents',
       ],
 
+      /* A SECOND, DIFFERENT KIND OF FIRST-PARTY SOURCE, kept separate from the web pages
+         above on purpose. These are crypto.com-owned TECHNICAL material, admissible because
+         ownership is pinned to one named repository that the crypto.com help centre itself
+         links and calls open source - not because GitHub is trusted generally. Widening the
+         source test to "anything on github" would admit community forks and reverse
+         engineering, which this project excludes by construction. */
+      technical_repository_sources: {
+        owner: 'crypto-com',
+        repository: 'crypto-com/crypto-agent-trading',
+        linked_from: 'help.crypto.com/en/articles/13913493-agent-skill-github-repository',
+        described_by_venue_as: 'The Agent Skill is open source',
+        files_read: ['README.md', 'repository file listing', 'crypto-com-app/SKILL.md'],
+        /* READ-PATH CAVEAT, carried rather than flattened. These files were retrieved
+           through a fetch layer that summarises with a small model, not by direct raw-byte
+           inspection. First-party material, mediated read. The Exchange endpoint below came
+           from documentation quoted directly and does not carry this caveat. */
+        read_path: 'FIRST_PARTY_RAW_FILE_VIA_SUMMARISING_FETCH_LAYER',
+      },
+
       states: {
         /* "Execute trading: Allows the agent to place trades (market orders only)." and
            "supports Market orders (One-Time Buy or Sell)". A real narrowing, on the ORDER
@@ -560,10 +579,23 @@ const CRYPTO_COM_EXCHANGE = {
            allow the agent to function." */
         always_enabled_permission: 'portfolio balance access',
         documented_permissions: ['Execute trading', 'Portfolio balance', 'Market data'],
-        confirmation_mode: 'documented option to require manual confirmation before trades',
-        kill_switch: 'documented as existing; server-side enforcement NOT stated',
+        /* CORRECTED 2026-08-21, second pass. See corrections below for the prior wording.
+           It sat among venue-side facts and read like a venue control; the venue's own
+           agent skill implements it as a CLIENT-SIDE setting the user can switch off. */
+        confirmation_mode: 'AGENT_SIDE_CLIENT_SETTING_NOT_VENUE_CONTROL',
+        confirmation_mode_detail: 'the skill defaults to requiring user confirmation and ' +
+          'exposes opt-out to auto-execution via a memory.confirmation_required setting',
+        /* Strengthened, and only to documentary strength. The App skill exposes API key
+           revocation as an API operation, which is more than "documented as existing" and
+           still says nothing about in-flight orders, immediacy, or whether the server
+           actually refuses a revoked key. */
+        kill_switch: 'API_KEY_REVOCATION_EXPOSED_AS_API_OPERATION',
+        kill_switch_enforcement: 'NOT_STATED',
+        kill_switch_in_flight_semantics: 'NOT_STATED',
         weekly_limit_default_usd: 10000,
         weekly_limit_scope: 'NOT_STATED',
+        /* Documented in the App skill. Connector behaviour, not an authority bound. */
+        rate_limits: { trades_per_minute: 10, api_calls_per_minute: 100, on_exceed: 'HTTP_429' },
       },
 
       /* PRESERVED, NOT RESOLVED. Choosing a winner would discard evidence, and in every
@@ -579,6 +611,16 @@ const CRYPTO_COM_EXCHANGE = {
           observed: 'Make cash withdrawals is one of nine permissions and is CHECKED under ' +
                     'All (default) - VISUALLY_CONFIRMED',
           status: 'UNRESOLVED',
+          technical_first_party: 'the crypto.com-owned App agent skill exposes withdrawal ' +
+                    'order creation and execution, and bank account management and linking, ' +
+                    'as capability families reachable with an Agent Key, and states the key ' +
+                    'requires permissions for trading, balances, deposits and withdrawals - ' +
+                    'DOCUMENTED, mediated read path',
+          /* Four legs now, not three, and they do not converge. The technical material is
+             the strongest of the four and it agrees with the SCREEN, not with the
+             announcement. Reading INFERRED: the announcement describes the intended
+             integration configuration, not the credential capability. Make cash withdrawals
+             is not decorative. Still not enforcement evidence either way. */
           posture: 'UNCHANGED. withdrawal_prohibition stays OBSERVED_EXCLUDABLE_NOT_DEFAULT. ' +
                    'Two official pages disagree with each other on strength, and both ' +
                    'disagree with the screen. Either the documentation is stale against the ' +
@@ -612,9 +654,15 @@ const CRYPTO_COM_EXCHANGE = {
           'weekly limit enforcement mechanism',
           'whether deselected permissions are refused server-side',
           'what revocation does to an in-flight agent',
-          'whether the kill switch is venue-side or client-side',
+          'whether a revoked key is actually refused by the server, and what happens to ' +
+            'orders already in flight - revocation is exposed as an API operation, which ' +
+            'is not the same as observing it refuse anything',
           'the exact moment the credential becomes live in the setup sequence',
           'whether generation is reversible',
+          'whether an App Agent Key authenticates against Exchange API endpoints - the two ' +
+            'surfaces are documented separately and never related to each other',
+          'whether the two surfaces share internal backend infrastructure beneath their ' +
+            'distinct hosts',
         ],
         OFFICIAL_DOCUMENTATION_SPARSE_OR_INSUFFICIENT: [
           'revocation mechanics generally',
@@ -644,7 +692,60 @@ const CRYPTO_COM_EXCHANGE = {
      * Keys call the Exchange API surface, or a different backend?
      *
      * DO NOT refactor on the strength of the question alone. Answer it first. */
-    credential_model_attribution: 'UNRESOLVED_APP_VS_EXCHANGE',
+    /* ANSWERED 2026-08-21, second pass, and the question above is left standing because
+       the sequence is the useful part.
+
+       Crypto.com-owned technical material settles it at the level a connector models. The
+       venue ships ONE repository containing TWO separate skills:
+
+         crypto-com-app        host wapi.crypto.com, credentials CDC_API_KEY/CDC_API_SECRET
+                               taken from the Agent Key management guide, two-step
+                               quote-then-confirm trade flow, plus fiat, bank account and
+                               withdrawal capability families
+         crypto-com-exchange   host api.crypto.com/exchange/v1, Exchange API credentials,
+                               private/create-order with amend and cancel, LIMIT and MARKET
+
+       And the Exchange REST/WS documentation mentions Agent Key, agent, OpenClaw and the
+       Crypto.com App exactly nowhere.
+
+       DISTINCT_EXECUTION_SURFACES is a claim about hosts, credentials, method vocabularies
+       and capability families - the things a connector declaration models. It is NOT proof
+       that crypto.com runs separate internal backends. Shared infrastructure behind two
+       gateways is excluded by nothing found, and no source addresses it. Whether an App
+       Agent Key would authenticate against an Exchange endpoint is likewise unestablished.
+
+       The DESIGN decision this unblocks is still open: two connector declarations, or one
+       crypto_com venue carrying app_agent_key and exchange_api_key execution profiles.
+       That needs an audit of what currently assumes CRYPTO_COM_EXCHANGE. Not this commit. */
+    credential_model_attribution: 'DISTINCT_EXECUTION_SURFACES',
+    credential_model_attribution_history: [
+      '2026-08-21 UNRESOLVED_APP_VS_EXCHANGE - documentation described both, related neither',
+      '2026-08-21 DISTINCT_EXECUTION_SURFACES - venue-owned agent repository ships two ' +
+        'skills with different hosts, credentials, methods and capability families',
+    ],
+    credential_model_caveat: 'EXECUTION_SURFACE_CLAIM_NOT_BACKEND_ARCHITECTURE_CLAIM',
+    execution_surfaces: {
+      app_agent_key: {
+        host: 'https://wapi.crypto.com',
+        host_provenance: 'DOCUMENTED_VIA_SUMMARISING_FETCH_LAYER',
+        credential_env: ['CDC_API_KEY', 'CDC_API_SECRET'],
+        order_model: 'two-step quote then confirm',
+        capability_families: ['trading', 'balances', 'transaction history', 'fiat and cash',
+                              'bank account management', 'deposits', 'withdrawals',
+                              'weekly trading limit retrieval', 'API key revocation'],
+      },
+      exchange_api: {
+        host: 'https://api.crypto.com/exchange/v1/',
+        host_provenance: 'DOCUMENTED_QUOTED_DIRECTLY',
+        sandbox_host: 'https://uat-api.3ona.co/exchange/v1/',
+        auth: 'api_key plus HMAC-SHA256 sig plus nonce',
+        order_methods: ['private/create-order', 'private/create-order-list'],
+        order_types: 'LIMIT and MARKET, with amend and cancel',
+        mentions_agent_key: false,
+      },
+      app_key_accepted_by_exchange_endpoints: 'UNKNOWN',
+      shared_backend_beneath_hosts: 'UNKNOWN',
+    },
 
     evidence: 'Setup screen read 2026-08-15 and worked through box by box 2026-08-19 by ' +
               'the account holder. Eight of nine permissions uncheck, including Make cash ' +

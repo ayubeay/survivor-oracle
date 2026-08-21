@@ -556,6 +556,83 @@ backend?** Recorded as `credential_model_attribution: UNRESOLVED_APP_VS_EXCHANGE
 
 Do not refactor on the strength of the question. Answer it first.
 
+**Answered the same day. See the section below. The question is left standing because the
+sequence is the useful part.**
+
+### ANSWERED: distinct execution surfaces, 2026-08-21 second pass
+
+Crypto.com's help centre links a venue-owned repository, `crypto-com/crypto-agent-trading`,
+which it calls open source. That repository ships **two separate skills**:
+
+    crypto-com-app        host wapi.crypto.com
+                          credentials CDC_API_KEY / CDC_API_SECRET, taken from the Agent Key
+                          management guide
+                          two-step quote then confirm trade flow
+                          plus fiat, cash, bank account linking, deposits and WITHDRAWALS,
+                          weekly limit retrieval, API key revocation
+
+    crypto-com-exchange   host api.crypto.com/exchange/v1/  (UAT uat-api.3ona.co)
+                          Exchange API credentials, HMAC-SHA256 with api_key, sig, nonce
+                          private/create-order, create-order-list, amend, cancel
+                          LIMIT and MARKET
+
+The Exchange REST and WebSocket documentation mentions Agent Key, agent, OpenClaw and the
+Crypto.com App **nowhere at all**.
+
+Recorded as `credential_model_attribution: DISTINCT_EXECUTION_SURFACES`, with the previous
+`UNRESOLVED_APP_VS_EXCHANGE` kept in `credential_model_attribution_history`.
+
+**What this claim is, and is not.** It is a claim about hosts, credentials, method
+vocabularies and capability families - the things a connector declaration models. It is NOT
+proof that crypto.com runs separate internal backends. Shared infrastructure behind two
+gateways is excluded by nothing found, and no source addresses it. Carried as
+`credential_model_caveat: EXECUTION_SURFACE_CLAIM_NOT_BACKEND_ARCHITECTURE_CLAIM`.
+
+Two things stay UNKNOWN and are recorded as such: whether an App Agent Key authenticates
+against Exchange endpoints, and whether the two share a backend.
+
+### The withdrawal contradiction gains a fourth leg
+
+    strictly off-limits                     product announcement    DOCUMENTED
+    should not be able to withdraw          US how-to               DOCUMENTED
+    Make cash withdrawals, checked          Agent Key screen        VISUALLY_CONFIRMED
+    withdrawal order creation and
+      execution, bank account management    venue-owned app skill   DOCUMENTED
+
+Four legs, and they do not converge. The technical material is the strongest of the four and
+it agrees with the **screen**, not with the announcement. Reading, INFERRED: the announcement
+describes the intended integration configuration, not the credential capability.
+`Make cash withdrawals` is not decorative.
+
+Still UNRESOLVED. Still not enforcement evidence in either direction. The posture does not
+move, and this makes the refusal to accept the default grant better founded than it was.
+
+### Corrected against our own record
+
+`confirmation_mode` previously read "documented option to require manual confirmation before
+trades", sitting among venue-side facts where it could be read as a venue control. The
+venue's own skill implements it as a client-side setting the user can switch off by
+requesting auto-execution. Now `AGENT_SIDE_CLIENT_SETTING_NOT_VENUE_CONTROL`, prior wording
+preserved in the declaration.
+
+`kill_switch` strengthened, and only to documentary strength: key revocation is exposed as an
+API operation. Whether the server actually refuses a revoked key, and what happens to orders
+already in flight, are both `NOT_STATED`.
+
+New documentary evidence: rate limits of 10 trades and 100 API calls per minute, HTTP 429 on
+exceed. Connector behaviour, not an authority bound.
+
+### Read-path provenance
+The `wapi.crypto.com` hostname came from a first-party raw repository file **read through a
+summarising fetch layer**, not by direct raw-byte inspection. The Exchange endpoints were
+quoted directly from documentation. Those are different evidence paths and the declaration
+keeps them apart -
+`DOCUMENTED_VIA_SUMMARISING_FETCH_LAYER` versus `DOCUMENTED_QUOTED_DIRECTLY`.
+
+The repository source is admissible because ownership is pinned to one named repo the venue
+links and calls its own. GitHub is not a trusted domain here, which is why it is recorded in
+`technical_repository_sources` rather than appended to the crypto.com web `sources` list.
+
 ### Still unknown after 2026-08-19
     what a hand-picked permission set is honoured as at execution time
     whether Execute trades spans spot, perpetuals and margin - LOAD-BEARING, and the

@@ -406,8 +406,18 @@ console.log('\nthe credential constraint survives to the transport');
     DOC.states.expiry_triggers.some(x => /inactivity/.test(x)));
   t('portfolio balance documented as always enabled',
     DOC.states.always_enabled_permission === 'portfolio balance access');
-  t('the kill switch is documented without a server-side claim',
-    /NOT stated/.test(DOC.states.kill_switch));
+  t('key revocation is documented as an API operation',
+    DOC.states.kill_switch === 'API_KEY_REVOCATION_EXPOSED_AS_API_OPERATION');
+  t('without any server-side enforcement claim',
+    DOC.states.kill_switch_enforcement === 'NOT_STATED' &&
+    DOC.states.kill_switch_in_flight_semantics === 'NOT_STATED');
+  t('confirmation is agent-side, not a venue control',
+    DOC.states.confirmation_mode === 'AGENT_SIDE_CLIENT_SETTING_NOT_VENUE_CONTROL');
+  t('and the client-side opt-out is recorded',
+    /memory.confirmation_required/.test(DOC.states.confirmation_mode_detail));
+  t('documented rate limits recorded', DOC.states.rate_limits.trades_per_minute === 10 &&
+    DOC.states.rate_limits.api_calls_per_minute === 100 &&
+    DOC.states.rate_limits.on_exceed === 'HTTP_429');
   t('weekly limit scope is not stated', DOC.states.weekly_limit_scope === 'NOT_STATED');
 
   console.log('\ndocumentation did not move the posture');
@@ -452,8 +462,39 @@ console.log('\nthe credential constraint survives to the transport');
   t('nothing was unreachable', RU.OFFICIAL_SOURCE_UNREACHABLE_FROM_ENVIRONMENT.length === 0);
   t('the three reasons are distinct keys', Object.keys(RU).length === 3);
 
-  console.log('\napp versus exchange attribution is open, not silently fixed');
-  t('recorded as unresolved', CC.credential_model_attribution === 'UNRESOLVED_APP_VS_EXCHANGE');
+  console.log('\napp versus exchange: answered at surface level, open as a design decision');
+  t('answered as distinct execution surfaces',
+    CC.credential_model_attribution === 'DISTINCT_EXECUTION_SURFACES');
+  t('the earlier unresolved state is kept, not overwritten',
+    CC.credential_model_attribution_history.length === 2 &&
+    /UNRESOLVED_APP_VS_EXCHANGE/.test(CC.credential_model_attribution_history[0]));
+  // The caveat is the load-bearing part: two hosts is a surface claim, not an architecture
+  // claim. Shared infrastructure beneath them is excluded by nothing we found.
+  t('and carries the not-a-backend-claim caveat',
+    CC.credential_model_caveat === 'EXECUTION_SURFACE_CLAIM_NOT_BACKEND_ARCHITECTURE_CLAIM');
+  const ES = CC.execution_surfaces;
+  t('two surfaces, two hosts', ES.app_agent_key.host === 'https://wapi.crypto.com' &&
+    ES.exchange_api.host === 'https://api.crypto.com/exchange/v1/');
+  t('the app host keeps its mediated read path',
+    ES.app_agent_key.host_provenance === 'DOCUMENTED_VIA_SUMMARISING_FETCH_LAYER');
+  t('the exchange host does not, because it was quoted directly',
+    ES.exchange_api.host_provenance === 'DOCUMENTED_QUOTED_DIRECTLY');
+  t('withdrawal families sit on the app surface',
+    ES.app_agent_key.capability_families.indexOf('withdrawals') !== -1);
+  t('and nowhere on the exchange surface',
+    ES.exchange_api.order_methods.indexOf('private/create-order') !== -1 &&
+    ES.exchange_api.mentions_agent_key === false);
+  t('cross-acceptance stays unknown',
+    ES.app_key_accepted_by_exchange_endpoints === 'UNKNOWN');
+  t('shared backend stays unknown', ES.shared_backend_beneath_hosts === 'UNKNOWN');
+  t('the withdrawal contradiction gained a fourth leg and stayed unresolved',
+    DOC.contradictions.some(c => c.subject === 'withdrawal authority' &&
+      c.technical_first_party && c.status === 'UNRESOLVED'));
+  t('technical repository provenance is pinned to one owner, not to github',
+    DOC.technical_repository_sources.repository === 'crypto-com/crypto-agent-trading' &&
+    DOC.technical_repository_sources.owner === 'crypto-com');
+  t('and it is kept out of the crypto.com web source list',
+    DOC.sources.every(u => u.indexOf('github') === -1));
   t('the connector still declares the two surfaces differ',
     CRYPTO_COM_EXCHANGE.product_boundary.app_and_exchange_differ === true);
   t('and no split has been performed', CRYPTO_COM_EXCHANGE.connector === 'crypto_com_exchange');

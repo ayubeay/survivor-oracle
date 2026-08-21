@@ -25,7 +25,7 @@ distinction exist, because at the venues examined it does not.
 
 Files: `src/finance/connector-capabilities.js`, `credential-grant.js`, `mandate.js`,
 `policy.js`, `execution-authorization.js`, `capability-firewall.js`. Tests:
-`./src/finance/run-tests.sh`, currently 365 passing. **Do not commit unless ALL GREEN.**
+`./src/finance/run-tests.sh`, currently 381 passing. **Do not commit unless ALL GREEN.**
 
 `credential-grant.js` landed 2026-08-19. Authority is a property of the credential, not of
 the connector: two keys at one venue can carry different authority, so a receipt naming only
@@ -184,6 +184,24 @@ The checkbox was opened on 2026-08-19: `Execute trades` has no sub-permissions, 
       `credential_model_attribution: UNRESOLVED_APP_VS_EXCHANGE`. It turns on one question:
       do App Agent Keys call the Exchange API surface or a different backend? Answer that
       before considering a connector split. Do not refactor on the question alone.
+
+      **ANSWERED 2026-08-21, second pass.** The venue-owned repository
+      `crypto-com/crypto-agent-trading` ships two skills: `crypto-com-app` on
+      `wapi.crypto.com` with Agent Key credentials, a quote-then-confirm trade flow and
+      fiat, bank and withdrawal families; and `crypto-com-exchange` on
+      `api.crypto.com/exchange/v1/` with `private/create-order`, LIMIT and MARKET. The
+      Exchange docs never mention Agent Key. Recorded as
+      `credential_model_attribution: DISTINCT_EXECUTION_SURFACES` with the prior state kept
+      in `credential_model_attribution_history`.
+
+      That is a surface claim, not a backend claim - `credential_model_caveat` says so, and
+      both whether an App key works against Exchange endpoints and whether the two share a
+      backend remain UNKNOWN.
+
+      **The design decision is still open and is NOT closed by this evidence:** two connector
+      declarations, or one `crypto_com` venue carrying `app_agent_key` and
+      `exchange_api_key` execution profiles. Choosing needs an audit of what currently
+      assumes `CRYPTO_COM_EXCHANGE`. Do that before moving any code.
    2. What Verify and Connect do, and whether Generate is reversible. The Set up screen
       states nothing. `key_creation_moment` is UNKNOWN.
    3. Whether the six unaccounted permissions can be left off a real key, and what a
