@@ -427,6 +427,135 @@ Robinhood's grant reports `carries_unaccounted_authority: true` with
 `unmapped_granted: null` - unknowable rather than empty, since a single OAuth scope offers
 no per-permission list to compare against.
 
+---
+
+## Official documentation read, 2026-08-21
+
+First-party crypto.com surfaces only. Forums, third-party blogs and search-result snippets
+were excluded by construction rather than filtered afterwards. Seven pages fetched and read
+in full:
+
+    help.crypto.com/en/articles/13843786-api-key-management
+    help.crypto.com/en/articles/13843782-getting-started
+    help.crypto.com/en/articles/13843765-openclaw-trading-overview
+    help.crypto.com/en/articles/13886868-support
+    crypto.com/en/product-news/openclaw-integration
+    crypto.com/us/crypto/learn/how-to-set-up-openclaw-on-cryptocom
+    crypto.com/en/product-news/cryptocom-exchange-openclaw-ai-agents
+
+Research outcome: **reachable, substantive, partially answering.** Access was never the
+constraint, which is itself worth recording - the unknowns below are silences in real
+documentation, not gaps where we could not look.
+
+**DOCUMENTED is a provenance level, and it is not enforcement.** Everything in this section
+is what crypto.com says. None of it is the venue refusing an action. The repository has made
+this mistake once: Robinhood's PRE_AUTHORIZED contract was recorded from documentation, and
+a five-surface search later found no mechanism behind it.
+
+Note the framing throughout: every statement is about the **OpenClaw integration**, not
+about the Agent Key as a general venue credential.
+
+### What the documentation establishes
+    order types      market orders only - "place trades (market orders only)",
+                     "Market orders (One-Time Buy or Sell)"
+    asset scope      "supports cryptocurrency trading, with more asset types to come",
+                     so stocks and prediction products are NOT currently in scope
+    secret key       shown once at setup, never again on the management screen
+    rotation         "The old key is invalidated immediately, and all connected bots will
+                     be disconnected"
+    permission edit  supported after issuance; "pending orders are preserved"
+    expiry           TWO triggers - the selected duration (default 30 days) AND
+                     "after 30 days of inactivity (no API calls)"
+    expiry effect    "all trading via OpenClaw stops"
+    always enabled   "Access portfolio balance is always enabled to allow the agent to
+                     function"
+    confirmation     an option to require a manual confirmation before trades
+    kill switch      documented as existing; server-side enforcement NOT stated
+
+The inactivity expiry was not visible anywhere in the UI. It is new evidence, not a
+restatement.
+
+The always-enabled portfolio permission is independent documentary corroboration of the
+interaction-observed mandatory permission, in different words - the UI calls it
+`View balance & transactions`, the docs call it portfolio balance access.
+
+### Order type is not product type
+`market orders only` is a real narrowing and it answers a different question than the one
+that has been blocking a decision. `Execute trades` remains unbounded on the product axis
+within cryptocurrency: spot versus perpetuals versus margin is not distinguished on any page.
+`product_scope_of_execution` stays UNKNOWN.
+
+### Three contradictions, preserved rather than resolved
+
+**Withdrawal authority.** Three sources, three strengths:
+
+    "High-risk actions, like withdrawing funds, are strictly off-limits"    announcement
+    "designed with trade-only permissions, which means it shouldn't be
+     able to withdraw or transfer funds"                                    US how-to
+    Make cash withdrawals is one of nine permissions, CHECKED under
+     All (default)                                                          VISUALLY_CONFIRMED
+
+The two official pages disagree with each other on strength, and both disagree with the
+screen. Either the documentation is stale against the app, or the permission is present and
+inert. **The posture does not move.** `withdrawal_prohibition` stays
+`OBSERVED_EXCLUDABLE_NOT_DEFAULT`, and nothing here relaxes the rule against accepting the
+default grant. A documented promise is the weakest of the three claims about what happens
+when a request actually arrives.
+
+**Permission count.** Documentation names exactly three permissions - Execute trading,
+Portfolio balance, Market data - consistently across three independent pages. The app showed
+nine, including six cash and banking permissions that appear in no documented list.
+Consistent across three pages, so not a single omission.
+
+**Weekly limit default.** Documentation says $10,000. The screen showed $1,000, slider at the
+floor. Both agree on the $1,000-$20,000 range, which is what the declaration records. No
+default is declared, and none should be until they agree.
+
+### Still unknown, with the reason attached
+    OFFICIAL_DOCUMENTATION_SUBSTANTIVE_BUT_SILENT_ON_THIS
+      spot versus perpetuals versus margin within cryptocurrency trading
+      weekly limit scope - per credential, per agent or per account
+      weekly limit enforcement mechanism
+      whether deselected permissions are refused server-side
+      what revocation does to an in-flight agent
+      whether the kill switch is venue-side or client-side
+      the exact moment the credential becomes live in the setup sequence
+      whether generation is reversible
+
+    OFFICIAL_DOCUMENTATION_SPARSE_OR_INSUFFICIENT
+      revocation mechanics generally
+      the "Weekly Trading Budget" article the trading overview references, which could not
+        be located as a reachable URL
+
+    OFFICIAL_SOURCE_UNREACHABLE_FROM_ENVIRONMENT
+      nothing
+
+The suffix describes where our knowledge stopped, not what Crypto.com's system does. In all
+three cases the venue semantic itself remains UNKNOWN.
+
+### UNRESOLVED: App Agent Key versus Exchange API credential
+
+The largest finding, and it is a question rather than an answer.
+
+Crypto.com documents two different credential systems:
+
+    App        Agent Key, under More, labelled Beta, the nine-permission screen observed
+               here, documented only for the OpenClaw integration
+    Exchange   classic API keys created through Account Management -> API Management, with
+               Can Read and Enable Trading, and no Agent Key feature referenced at all
+
+This repository declares the App-derived credential model inside `CRYPTO_COM_EXCHANGE`,
+endpointed at `api.crypto.com/exchange/v1` - while that same declaration already records
+`app_and_exchange_differ: true`. The tension predates this research. The documentation makes
+it concrete.
+
+Whether the clean model needs two connectors - `crypto_com_app_agent_key` and
+`crypto_com_exchange_api` - or merely credential profiles within one, turns on a question
+nobody has answered: **do App Agent Keys call the Exchange API surface, or a different
+backend?** Recorded as `credential_model_attribution: UNRESOLVED_APP_VS_EXCHANGE`.
+
+Do not refactor on the strength of the question. Answer it first.
+
 ### Still unknown after 2026-08-19
     what a hand-picked permission set is honoured as at execution time
     whether Execute trades spans spot, perpetuals and margin - LOAD-BEARING, and the

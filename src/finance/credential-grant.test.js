@@ -388,6 +388,76 @@ console.log('\nthe credential constraint survives to the transport');
   t('budget enforcement remains UNVERIFIED', cm.enforcement.total_budget_usd === 'UNVERIFIED');
   t('expiry enforcement remains UNVERIFIED', cm.enforcement.expires_at === 'UNVERIFIED');
 
+  console.log('\nofficial documentation, 2026-08-21 - DOCUMENTED is not enforcement');
+  const DOC = CC.official_documentation;
+  t('recorded at documentary strength', DOC.provenance === 'DOCUMENTED');
+  t('and claims no enforcement', DOC.enforcement_claim === 'NONE');
+  t('seven first-party sources, all crypto.com', DOC.sources.length === 7 &&
+    DOC.sources.every(u => /^(help\.)?crypto\.com\//.test(u)));
+  t('framed around the OpenClaw integration, not the venue at large',
+    DOC.documented_for === 'OPENCLAW_INTEGRATION');
+  t('market orders only', DOC.states.order_types === 'MARKET_ONLY');
+  t('cryptocurrency only, more asset types to come',
+    DOC.states.asset_scope === 'CRYPTOCURRENCY_ONLY_MORE_ASSET_TYPES_TO_COME');
+  t('secret shown once at setup', DOC.states.secret_visibility === 'SHOWN_ONCE_AT_SETUP');
+  t('rotation invalidates the old key immediately',
+    /INVALIDATED_IMMEDIATELY/.test(DOC.states.rotation_effect));
+  t('two expiry triggers, including inactivity', DOC.states.expiry_triggers.length === 2 &&
+    DOC.states.expiry_triggers.some(x => /inactivity/.test(x)));
+  t('portfolio balance documented as always enabled',
+    DOC.states.always_enabled_permission === 'portfolio balance access');
+  t('the kill switch is documented without a server-side claim',
+    /NOT stated/.test(DOC.states.kill_switch));
+  t('weekly limit scope is not stated', DOC.states.weekly_limit_scope === 'NOT_STATED');
+
+  console.log('\ndocumentation did not move the posture');
+  // The failure this guards against: reading "withdrawing funds is strictly off-limits" as
+  // permission to relax. Robinhood's PRE_AUTHORIZED was recorded from documentation and a
+  // five-surface search later found no mechanism behind it.
+  t('withdrawal state unchanged by the docs',
+    CRYPTO_COM_EXCHANGE.capabilities.withdrawal_prohibition === 'OBSERVED_EXCLUDABLE_NOT_DEFAULT');
+  t('nothing promoted to VERIFIED_ENFORCED',
+    !JSON.stringify(CRYPTO_COM_EXCHANGE).includes('VERIFIED_ENFORCED'));
+  t('product scope still UNKNOWN despite the asset-scope statement',
+    CC.product_scope_of_execution === 'UNKNOWN');
+  t('order-type scope is not product scope',
+    DOC.states.order_types === 'MARKET_ONLY' && CC.product_scope_of_execution === 'UNKNOWN');
+  t('no default weekly limit is declared, only the range',
+    CRYPTO_COM_EXCHANGE.agent_key_setup.weekly_limit_range_usd.join() === '1000,20000' &&
+    CRYPTO_COM_EXCHANGE.agent_key_setup.weekly_limit_default_usd === undefined);
+
+  console.log('\ncontradictions preserved, not resolved');
+  const subj = DOC.contradictions.map(c => c.subject);
+  t('three contradictions recorded', DOC.contradictions.length === 3);
+  t('withdrawal authority among them', subj.indexOf('withdrawal authority') !== -1);
+  t('permission count among them', subj.indexOf('permission count') !== -1);
+  t('weekly limit default among them', subj.indexOf('weekly limit default') !== -1);
+  t('none is marked resolved', DOC.contradictions.every(c => c.status === 'UNRESOLVED'));
+  t('the withdrawal one keeps both documentary strengths', DOC.contradictions.some(c =>
+    c.subject === 'withdrawal authority' && c.documented_strong && c.documented_weak &&
+    c.observed));
+  t('and states the posture is unchanged', DOC.contradictions.some(c =>
+    c.subject === 'withdrawal authority' && /UNCHANGED/.test(c.posture)));
+
+  console.log('\nresearch unknowns carry their reason');
+  const RU = DOC.research_unknowns;
+  t('substantive-but-silent is populated',
+    RU.OFFICIAL_DOCUMENTATION_SUBSTANTIVE_BUT_SILENT_ON_THIS.length >= 6);
+  t('including the load-bearing product question',
+    RU.OFFICIAL_DOCUMENTATION_SUBSTANTIVE_BUT_SILENT_ON_THIS.some(x => /perpetuals/.test(x)));
+  t('sparse is a separate reason',
+    RU.OFFICIAL_DOCUMENTATION_SPARSE_OR_INSUFFICIENT.length >= 1);
+  // Access was never the constraint. Recording that as empty is itself the finding - it
+  // distinguishes "we looked and it is not documented" from "we could not look".
+  t('nothing was unreachable', RU.OFFICIAL_SOURCE_UNREACHABLE_FROM_ENVIRONMENT.length === 0);
+  t('the three reasons are distinct keys', Object.keys(RU).length === 3);
+
+  console.log('\napp versus exchange attribution is open, not silently fixed');
+  t('recorded as unresolved', CC.credential_model_attribution === 'UNRESOLVED_APP_VS_EXCHANGE');
+  t('the connector still declares the two surfaces differ',
+    CRYPTO_COM_EXCHANGE.product_boundary.app_and_exchange_differ === true);
+  t('and no split has been performed', CRYPTO_COM_EXCHANGE.connector === 'crypto_com_exchange');
+
   console.log('\nfive provenance levels, still distinct');
   // Visually confirmed, interaction-observed, inferred, unknown, verified-enforced. They
   // describe different amounts of knowledge and must not collapse into one another.

@@ -25,7 +25,7 @@ distinction exist, because at the venues examined it does not.
 
 Files: `src/finance/connector-capabilities.js`, `credential-grant.js`, `mandate.js`,
 `policy.js`, `execution-authorization.js`, `capability-firewall.js`. Tests:
-`./src/finance/run-tests.sh`, currently 333 passing. **Do not commit unless ALL GREEN.**
+`./src/finance/run-tests.sh`, currently 365 passing. **Do not commit unless ALL GREEN.**
 
 `credential-grant.js` landed 2026-08-19. Authority is a property of the credential, not of
 the connector: two keys at one venue can carry different authority, so a receipt naming only
@@ -53,6 +53,7 @@ explicitly and is not the same as missing information.
       IS NOT MANDATE AUTHORITY
     AN ABSENCE OF CONTROLS IS NOT A STATEMENT OF SCOPE
     AUTHORITY NO CLASS COVERS IS AUTHORITY NOTHING CHECKS
+    DOCUMENTED IS NOT VERIFIED ENFORCED
     ABSENCE OF INPUT IS A REASON TO REFUSE, NOT TO SKIP
 
 Each came from a failure, not an opinion. See `docs/DOCTRINE_skipped_controls.md`,
@@ -170,8 +171,19 @@ The checkbox was opened on 2026-08-19: `Execute trades` has no sub-permissions, 
 
    **The next evidence gaps, in order:**
 
-   1. What `Execute trades` spans. One checkbox, no sub-controls, above nine product
-      families. Unknown, and the only thing between here and a decision.
+   1. What `Execute trades` spans. Official documentation read 2026-08-21 narrowed it on
+      the ORDER TYPE axis - market orders only - and on asset family - cryptocurrency only,
+      more to come, so no stocks or prediction products. It says nothing about spot versus
+      perpetuals versus margin. `product_scope_of_execution` stays UNKNOWN with reason
+      `OFFICIAL_DOCUMENTATION_SUBSTANTIVE_BUT_SILENT_ON_THIS`. Still the only thing between
+      here and a decision.
+
+   1a. **UNRESOLVED: App Agent Key versus Exchange API credential.** Crypto.com documents
+      these as two different credential systems, and this repository carries the App-derived
+      model inside `CRYPTO_COM_EXCHANGE`. Recorded as
+      `credential_model_attribution: UNRESOLVED_APP_VS_EXCHANGE`. It turns on one question:
+      do App Agent Keys call the Exchange API surface or a different backend? Answer that
+      before considering a connector split. Do not refactor on the question alone.
    2. What Verify and Connect do, and whether Generate is reversible. The Set up screen
       states nothing. `key_creation_moment` is UNKNOWN.
    3. Whether the six unaccounted permissions can be left off a real key, and what a

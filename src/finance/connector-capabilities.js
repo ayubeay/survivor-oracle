@@ -511,10 +511,146 @@ const CRYPTO_COM_EXCHANGE = {
             'this repository.',
     },
 
+    /* DOCUMENTED - a provenance level distinct from everything above it.
+     *
+     * First-party crypto.com surfaces only, read 2026-08-21. Forums, third-party blogs and
+     * search-result snippets were excluded by construction, not filtered afterwards.
+     *
+     * NONE OF THIS IS ENFORCEMENT EVIDENCE. Documentation describing a control and the
+     * venue refusing an action are different claims, and only the second earns
+     * VERIFIED_ENFORCED. The repository has made this mistake once already: Robinhood's
+     * PRE_AUTHORIZED contract was recorded from documentation and a five-surface search
+     * later found no mechanism behind it. */
+    official_documentation: {
+      researched_at: '2026-08-21',
+      provenance: 'DOCUMENTED',
+      enforcement_claim: 'NONE',
+      /* Every documented statement below is framed around the OpenClaw integration
+         specifically, not the Agent Key as a general venue credential. */
+      documented_for: 'OPENCLAW_INTEGRATION',
+      sources: [
+        'help.crypto.com/en/articles/13843786-api-key-management',
+        'help.crypto.com/en/articles/13843782-getting-started',
+        'help.crypto.com/en/articles/13843765-openclaw-trading-overview',
+        'help.crypto.com/en/articles/13886868-support',
+        'crypto.com/en/product-news/openclaw-integration',
+        'crypto.com/us/crypto/learn/how-to-set-up-openclaw-on-cryptocom',
+        'crypto.com/en/product-news/cryptocom-exchange-openclaw-ai-agents',
+      ],
+
+      states: {
+        /* "Execute trading: Allows the agent to place trades (market orders only)." and
+           "supports Market orders (One-Time Buy or Sell)". A real narrowing, on the ORDER
+           TYPE axis - which is not the product axis and does not answer it. */
+        order_types: 'MARKET_ONLY',
+        /* "Currently, the OpenClaw integration supports cryptocurrency trading, with more
+           asset types to come." So stocks and prediction products are documented as NOT
+           currently in scope. Spot versus perpetuals versus margin is never distinguished
+           anywhere - see product_scope_of_execution, which stays UNKNOWN. */
+        asset_scope: 'CRYPTOCURRENCY_ONLY_MORE_ASSET_TYPES_TO_COME',
+        secret_visibility: 'SHOWN_ONCE_AT_SETUP',
+        rotation_effect: 'OLD_KEY_INVALIDATED_IMMEDIATELY_CONNECTED_AGENTS_DISCONNECTED',
+        permission_editing_after_issuance: 'SUPPORTED_PENDING_ORDERS_PRESERVED',
+        /* Two triggers, and the second was not visible in the UI at all. */
+        expiry_triggers: ['selected duration, default 30 days',
+                          '30 days of inactivity (no API calls)'],
+        expiry_effect: 'all trading via the integration stops',
+        /* Independent documentary support for the interaction-observed mandatory
+           permission, in different words: "Access portfolio balance is always enabled to
+           allow the agent to function." */
+        always_enabled_permission: 'portfolio balance access',
+        documented_permissions: ['Execute trading', 'Portfolio balance', 'Market data'],
+        confirmation_mode: 'documented option to require manual confirmation before trades',
+        kill_switch: 'documented as existing; server-side enforcement NOT stated',
+        weekly_limit_default_usd: 10000,
+        weekly_limit_scope: 'NOT_STATED',
+      },
+
+      /* PRESERVED, NOT RESOLVED. Choosing a winner would discard evidence, and in every
+         case here the sources disagree about something that cannot be settled without
+         evidence this project has deliberately not gathered. */
+      contradictions: [
+        {
+          subject: 'withdrawal authority',
+          documented_strong: 'High-risk actions, like withdrawing funds, are strictly ' +
+                             'off-limits - product announcement',
+          documented_weak: 'designed with trade-only permissions, which means it should ' +
+                           'not be able to withdraw or transfer funds - US how-to',
+          observed: 'Make cash withdrawals is one of nine permissions and is CHECKED under ' +
+                    'All (default) - VISUALLY_CONFIRMED',
+          status: 'UNRESOLVED',
+          posture: 'UNCHANGED. withdrawal_prohibition stays OBSERVED_EXCLUDABLE_NOT_DEFAULT. ' +
+                   'Two official pages disagree with each other on strength, and both ' +
+                   'disagree with the screen. Either the documentation is stale against the ' +
+                   'app, or the permission is present and inert. Nothing here relaxes the ' +
+                   'rule against accepting the default grant.',
+        },
+        {
+          subject: 'permission count',
+          documented: 'exactly three, consistently across three independent pages',
+          observed: 'nine, INTERACTION_OBSERVED and VISUALLY_CONFIRMED, including six cash ' +
+                    'and banking permissions absent from every documented list',
+          status: 'UNRESOLVED',
+          note: 'Consistent across three pages, so not a single omission. The documented ' +
+                'always-enabled portfolio permission does corroborate the observed ' +
+                'mandatory one, in different wording.',
+        },
+        {
+          subject: 'weekly limit default',
+          documented: '$10,000',
+          observed: '$1,000, slider at the floor, VISUALLY_CONFIRMED',
+          status: 'UNRESOLVED',
+          note: 'The declaration records only the range, which both sources agree on. ' +
+                'No default is declared, and none should be until they agree.',
+        },
+      ],
+
+      research_unknowns: {
+        OFFICIAL_DOCUMENTATION_SUBSTANTIVE_BUT_SILENT_ON_THIS: [
+          'spot versus perpetuals versus margin within cryptocurrency trading',
+          'weekly limit scope - per credential, per agent or per account',
+          'weekly limit enforcement mechanism',
+          'whether deselected permissions are refused server-side',
+          'what revocation does to an in-flight agent',
+          'whether the kill switch is venue-side or client-side',
+          'the exact moment the credential becomes live in the setup sequence',
+          'whether generation is reversible',
+        ],
+        OFFICIAL_DOCUMENTATION_SPARSE_OR_INSUFFICIENT: [
+          'revocation mechanics generally',
+          'the Weekly Trading Budget article referenced by the trading overview, which ' +
+            'could not be located as a reachable URL',
+        ],
+        OFFICIAL_SOURCE_UNREACHABLE_FROM_ENVIRONMENT: [],
+      },
+    },
+
+    /* UNRESOLVED ARCHITECTURAL QUESTION, opened 2026-08-21. Recorded rather than fixed.
+     *
+     * Crypto.com documents two DIFFERENT credential systems:
+     *
+     *   App      Agent Key, under More, Beta, the nine-permission screen observed here,
+     *            documented only for the OpenClaw integration
+     *   Exchange classic API keys via Account Management -> API Management, with
+     *            Can Read / Enable Trading, and no Agent Key feature referenced at all
+     *
+     * This declaration is CRYPTO_COM_EXCHANGE, endpointed at api.crypto.com/exchange/v1,
+     * and carries an App-derived credential model - while its own product_boundary already
+     * says the App and the Exchange are different universes.
+     *
+     * The tension predates this research; the documentation makes it concrete. Whether it
+     * needs two connectors (crypto_com_app_agent_key and crypto_com_exchange_api) or merely
+     * credential profiles within one turns on a question nobody has answered: do App Agent
+     * Keys call the Exchange API surface, or a different backend?
+     *
+     * DO NOT refactor on the strength of the question alone. Answer it first. */
+    credential_model_attribution: 'UNRESOLVED_APP_VS_EXCHANGE',
+
     evidence: 'Setup screen read 2026-08-15 and worked through box by box 2026-08-19 by ' +
               'the account holder. Eight of nine permissions uncheck, including Make cash ' +
               'withdrawals and Execute trades; View balance & transactions will not. ' +
-              'Selection observed; honouring at execution time never observed.',
+              'Selection observed; honouring at execution time never observed. Official ' +
+              'documentation read 2026-08-21 - see official_documentation.',
   },
 
   instruments: {
